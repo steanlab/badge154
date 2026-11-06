@@ -25,7 +25,7 @@
 <p id="err" style="color:#c00;font-weight:600"></p>
 <script>window.onerror=function(m,s,l){var e=document.getElementById('err'); if(e) e.textContent='Script error: '+m+' (line '+l+')'; };</script>
 <p id="env"></p>
-<p><button id="connect">Connect</button> <button id="disconnect">Disconnect</button> <button id="install" style="display:none">Install app</button></p>
+<p><button id="connect">Connect</button> <button id="disconnect">Disconnect</button> <button id="install" style="display:none">Install app</button><br><label><input type="checkbox" id="alldev"> show all Bluetooth devices (use this if the tag is not in the list)</label></p>
 <p id="state">not connected</p>
 <p id="devinfo"></p>
 
@@ -231,7 +231,7 @@ async function run(fn){
 }
 $('connect').onclick=()=>run(async()=>{
   if(!navigator.bluetooth)throw new Error('Web Bluetooth is not available in this browser');
-  dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'ESL_'}],optionalServices:[SERV]});
+  dev=await navigator.bluetooth.requestDevice($('alldev').checked?{acceptAllDevices:true,optionalServices:[SERV]}:{filters:[{namePrefix:'ESL_'}],optionalServices:[SERV]});
   dev.addEventListener('gattserverdisconnected',()=>{setState('disconnected');chr=null;});
   setState('connecting...');
   const srv=await dev.gatt.connect();const svc=await srv.getPrimaryService(SERV);chr=await svc.getCharacteristic(CHAR);
