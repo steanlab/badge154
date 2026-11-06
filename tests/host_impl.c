@@ -1,5 +1,6 @@
 #include "host_stubs.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include "hwinfo.h"
 uint8_t flash_mem[512*1024];
 
@@ -10,7 +11,19 @@ int fake_conn = 0;
 uint8_t shown[10000]; int show_count = 0;
 int write_violations = 0, erase_count = 0;
 void flash_read_page(uint32_t a, uint32_t l, uint8_t *b){ memcpy(b, flash_mem+a, l); }
+/* The real flash cannot be read while it is programmed, so the source of a write must be in RAM (writable), never const data.
+   Checked through /proc/self/maps: the source mapping has to be writable. */
+static int src_writable(const void *p){
+  FILE *f = fopen("/proc/self/maps", "r"); char line[512]; int ok = 0;
+  if (!f) return 1;
+  while (fgets(line, sizeof line, f)) {
+    unsigned long lo, hi; char perm[8];
+    if (sscanf(line, "%lx-%lx %7s", &lo, &hi, perm) == 3 && (unsigned long)p >= lo && (unsigned long)p < hi) { ok = perm[1] == 'w'; break; }
+  }
+  fclose(f); return ok;
+}
 void flash_write_page(uint32_t a, uint32_t l, uint8_t *b){
+  if (l <= 16 && !src_writable(b)) write_violations++;
   if ((a & 255) + l > 256) write_violations++;
   for (uint32_t i=0;i<l;i++){ if ((flash_mem[a+i] & b[i]) != b[i]) write_violations++; flash_mem[a+i] &= b[i]; }
 }
@@ -25,7 +38,7 @@ int fake_tap = 0;
 void nfc_poll(void){}
 uint8_t nfc_tap_take(void){ uint8_t t = (uint8_t)fake_tap; fake_tap = 0; return t; }
 int wdt_test_calls = 0;
-void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s){ int i; (void)s; for(i=0;i<TXT_LINES;i++) strcpy(ln[i], i==0 ? "BATTERY 3.012 V" : i==5 ? "RAM 19659 B FREE" : "TEST LINE"); }
+void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s){ int i; (void)s; for(i=0;i<TXT_LINES;i++) strcpy(ln[i], i==0 ? "Battery 3.012 V" : i==5 ? "RAM 19659 B free" : "TEST LINE"); }
 void wdt_test_request(void){ wdt_test_calls++; }
 uint8_t wdt_restarts(void){return 0;}
 void nfc_probe_run(uint8_t s, uint8_t a){(void)s;(void)a;}

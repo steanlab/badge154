@@ -99,7 +99,7 @@ void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s)
     for (i = 0; i < TXT_LINES; i++)
         ln[i][0] = 0;
 
-    p = cat(ln[0], "BATTERY ");
+    p = cat(ln[0], "Battery ");
     p = dec(p, mv / 1000);
     *p++ = '.';
     *p++ = (char)('0' + mv / 100 % 10);
@@ -111,25 +111,25 @@ void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s)
     flash_read_page(0x18, 4, hdr); /* the image header holds the firmware size */
     fw = (uint32_t)hdr[0] | ((uint32_t)hdr[1] << 8) | ((uint32_t)hdr[2] << 16) | ((uint32_t)hdr[3] << 24);
     kb10 = fw * 10 / 1024;
-    p = cat(ln[1], "FW ");
+    p = cat(ln[1], "Firmware ");
     p = dec(p, kb10 / 10);
     *p++ = '.';
     *p++ = (char)('0' + kb10 % 10);
-    p = cat(p, "/80 KB");
+    p = cat(p, " KB");
     *p = 0;
 
-    p = cat(ln[2], "SLIDES ");
+    p = cat(ln[2], "Slides ");
     p = dec(p, s->count);
     *p = 0;
 
-    p = cat(ln[3], "BLOCKS ");
+    p = cat(ln[3], "Blocks ");
     p = dec(p, (uint32_t)(s->sectors - s->free_sectors));
     *p++ = '/';
     p = dec(p, s->sectors);
     *p = 0;
 
     fl_read_mid(mid);
-    p = cat(ln[4], "FLASH ");
+    p = cat(ln[4], "Flash ");
     if (mid[2] >= 10 && mid[2] <= 26)
     {
         uint32_t k = 1u << (mid[2] - 10);
@@ -144,13 +144,13 @@ void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s)
 
     p = cat(ln[5], "RAM ");
     p = dec(p, SRAM_END - e);
-    p = cat(p, " B FREE");
+    p = cat(p, " B free");
     *p = 0;
 
-    p = cat(ln[6], "TX POWER ");
+    p = cat(ln[6], "TX power ");
     *p++ = TX_DBM < 0 ? '-' : '+';
     p = dec(p, (uint32_t)(TX_DBM < 0 ? -TX_DBM : TX_DBM));
-    p = cat(p, " DBM");
+    p = cat(p, " dBm");
     *p = 0;
 }
 

@@ -3,7 +3,7 @@ import ctypes, sys
 L = ctypes.CDLL('./libslides.so')
 img = (ctypes.c_uint8*10000)()
 lines = (ctypes.c_char*17*7)()
-txt = ["BATTERY 3.012 V","FW 69.9/80 KB","SLIDES 6","BLOCKS 11/98","FLASH 512 KB","RAM 19659 B FREE","TX POWER +3 DBM"]
+txt = ["Battery 3.012 V","Firmware 69.9 KB","Slides 6","Blocks 11/98","Flash 512 KB","RAM 19659 B free","TX power +3 dBm"]
 for i,s in enumerate(txt): lines[i].value = s.encode()
 L.textscr_draw.argtypes=[ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_uint8]
 L.textscr_draw(img, b"TAG HARDWARE", ctypes.byref(lines), 7)
