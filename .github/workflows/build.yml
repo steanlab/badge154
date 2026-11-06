@@ -1,1 +1,58 @@
+name: build
 
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # upstream commit the overlay in firmware/ was written and tested against
+  UPSTREAM_REF: 3778d296f418c30b05310d86dafa4e3404071cb4
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host tests (storage, protocol, LZ4, JS codec)
+        run: bash tests/run.sh
+
+  firmware:
+    needs: test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upstream firmware (atc1441/ATC_TLSR_Paper, pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: atc1441/ATC_TLSR_Paper
+          ref: ${{ env.UPSTREAM_REF }}
+          path: upstream
+
+      - name: Apply the badge154 overlay
+        run: python3 firmware/apply.py upstream
+
+      - name: 32-bit libraries for the tc32 compiler
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y libc6:i386 libstdc++6:i386
+
+      - name: Build
+        run: |
+          cd upstream/Firmware
+          chmod +x tc32_linux/bin/*
+          make
+
+      - name: Collect
+        run: |
+          mkdir out
+          cp upstream/Firmware/ATC_Paper.bin out/badge154-firmware.bin
+          cd out && sha256sum badge154-firmware.bin | tee SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: badge154-firmware
+          path: out/ 
