@@ -25,6 +25,7 @@ int fake_tap = 0;
 void nfc_poll(void){}
 uint8_t nfc_tap_take(void){ uint8_t t = (uint8_t)fake_tap; fake_tap = 0; return t; }
 int wdt_test_calls = 0;
+void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s){ int i; (void)s; for(i=0;i<TXT_LINES;i++) strcpy(ln[i], i==0 ? "BATTERY 3.012 V" : i==5 ? "RAM 19659 B FREE" : "TEST LINE"); }
 void wdt_test_request(void){ wdt_test_calls++; }
 uint8_t wdt_restarts(void){return 0;}
 void nfc_probe_run(uint8_t s, uint8_t a){(void)s;(void)a;}
