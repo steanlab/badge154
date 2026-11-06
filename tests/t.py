@@ -9,6 +9,7 @@ L.slides_ble_cmd.argtypes=[ctypes.c_char_p, ctypes.c_uint]
 def cmd(*b, data=None):
     p = bytes(b) + (data or b'')
     L.slides_ble_cmd(p, len(p)); L.slides_tick()
+    assert stat[19]==0x5A, 'answer to command 0x%02x has no end marker'%p[0]
     return bytes(stat)
 
 def crc16(d, c=0xFFFF):
@@ -133,12 +134,17 @@ cmd(0x24); info=cmd(0x28); check(info[3]==0,'clear all')
 host_reset(); L.slides_init()
 for s in range(3): upload(s,lz4(pack2([s+0 if s<4 else 1]*40000)),1)
 cmd(0x26,1,0,0,0)   # 1 minute in order
+base=gi('show_count').value
 gu('fake_time').value=10; L.slides_tick(); L.slides_tick()   # boot show
-check(gi('show_count').value>0,'boot show after 3 s')
+check(gi('show_count').value==base+1,'boot: exactly one refresh (splash) after 3 s')
+codes=[(shown[i]>>sh)&3 for i in range(10000) for sh in (6,4,2,0)]
+check(set(codes)<={0,1} and codes.count(0)>1500 and codes.count(1)>20000,'splash: only black and white, text present (black px=%d)'%codes.count(0))
+check(all(c==1 for c in codes[:200*8]) and all(c==1 for c in codes[-200*8:]),'splash: blank margins at top and bottom')
+gu('fake_time').value+=30; before=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==before,'splash stays until the interval is over')
 seq=[]
 for k in range(5):
     gu('fake_time').value+=61; L.slides_tick(); seq.append(shown[0]>>6)
-check(seq==[1,2,0,1,2] or seq==[2,0,1,2,0] or True,f'auto change sequence {seq}')
+check(seq==[0,1,2,0,1],f'auto change sequence after the splash {seq}')
 gu('fake_time').value+=30; before=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==before,'no change before interval')
 cmd(0x26,0,0,0,0); gu('fake_time').value+=9999; before=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==before,'interval 0 = off')
 L.slides_init(); info=cmd(0x28); check(info[6]|(info[7]<<8)==0,'config persisted (0)')
