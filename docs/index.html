@@ -62,11 +62,20 @@
  <label><input type="checkbox" id="forceraw"> do not compress</label></p>
  <p><button class="act" id="info">Read status</button></p>
 </details>
+<details><summary>NFC probe (diagnostics)</summary>
+ <p class="hint">Hold the phone against the tag and press the buttons. IRQ = level of the chip's interrupt pin (PC4); edges are counted by the tag between reads.</p>
+ <p><button class="act" id="nfcA">Read A</button> <button class="act" id="nfcB">Read B</button>
+  <button class="act" id="nfcInit">Chip setup (OEPL)</button> <button class="act" id="nfcClr">Clear counters</button>
+  <label><input type="checkbox" id="nfcAuto"> read A every 1 s</label></p>
+ <p>MAIN mask <input id="nfcMask" value="00" style="width:3em"> <button class="act" id="nfcSetMask">Write 0xFFFA</button>
+  AUX mask <input id="nfcMaskC" value="18" style="width:3em"> <button class="act" id="nfcSetMaskC">Write 0xFFFC</button></p>
+ <pre id="nfcOut" style="white-space:pre-wrap;font-size:13px">no data yet</pre>
+</details>
 <p><button id="copyLog">Copy log</button> <button id="clearLog">Clear log</button></p>
 <div id="log"></div>
 
 <script>
-const BUILD='1.2';  // page version; goes with firmware v8
+const BUILD='1.3';  // page version; goes with firmware v9
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -290,6 +299,30 @@ $('upload').onclick=()=>run(async()=>{
 $('cancelBtn').onclick=()=>{cancel=true;};
 $('copyLog').onclick=()=>navigator.clipboard&&navigator.clipboard.writeText(logEl.textContent);
 $('clearLog').onclick=()=>{logEl.textContent='';};
+
+// ---- NFC probe ----
+const NFC_A=['FFF3 RF_STATUS','FFF7 MAIN_IRQ','FFF8 FIFO_IRQ','FFF9 AUX_IRQ','FFFA MAIN_MASK','FFFB FIFO_MASK','FFFC AUX_MASK','FFFD NFC_CFG','FFE0','FFE1','FFE2','FFE7'];
+const NFC_B=['03B0','03B1','03B2','03B3','03B4','03B5','03B6','03B7','FFF2 FIFO_WORDCNT','FFF4 RF_TXEN','FFF5 RF_BAUD','FFF6 RF_RATS'];
+const hex2=v=>v.toString(16).toUpperCase().padStart(2,'0');
+async function nfcDo(sub,arg){
+  need();await wr([0x2B,sub,arg||0]);const s=await readStatus(0x2B);const r=s.raw;
+  const sb=r[2]>>4,ack=r[2]&1;
+  let t='chip ACK on 0xAE: '+(ack?'yes':'NO')+'\nIRQ now: '+r[3]+'   falling edges: '+r[4]+'   rising edges: '+r[5]+'   seen low: '+(r[6]&1)+' high: '+((r[6]>>1)&1)+'\n';
+  if(ack&&sb!==5){const names=sb===1?NFC_B:NFC_A;for(let i=0;i<12;i++)t+=names[i].padEnd(20)+' = 0x'+hex2(r[7+i])+'  '+r[7+i].toString(2).padStart(8,'0')+'\n';}
+  $('nfcOut').textContent=t;
+  log('nfc probe '+sub+': ack='+ack+' irq='+r[3]+' fall='+r[4]+' rise='+r[5]);
+  return r;
+}
+let nfcTimer=null;
+for(const [id,fn] of [
+  ['nfcA',()=>nfcDo(0)],['nfcB',()=>nfcDo(1)],['nfcInit',()=>nfcDo(2)],['nfcClr',()=>nfcDo(5)],
+  ['nfcSetMask',()=>nfcDo(3,parseInt($('nfcMask').value,16)||0)],
+  ['nfcSetMaskC',()=>nfcDo(4,parseInt($('nfcMaskC').value,16)||0)],
+]) $(id).onclick=()=>run(fn);
+$('nfcAuto').onchange=()=>{
+  if(nfcTimer){clearInterval(nfcTimer);nfcTimer=null;}
+  if($('nfcAuto').checked)nfcTimer=setInterval(()=>{if(!busy&&chr)run(()=>nfcDo(0));},1000);
+};
 $('ver').textContent='v'+BUILD;
 let installEvt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('install').style.display='';});
