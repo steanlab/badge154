@@ -124,7 +124,7 @@ for s in range(120):
     r=upload(s,z,1)
     if r[1]!=0: check(r[1]==2,f'NOSPACE after {cnt} flat slides res={r[1]}'); break
     cnt+=1
-check(cnt>=86 or cnt>=1,f'stored {cnt} flat slides')
+check(cnt>=98,f'stored {cnt} flat slides')
 # 7 persistence + delete + replace
 L.slides_init(); L.slides_tick(); info=cmd(0x28); check(info[3]==cnt,f'after reinit count={info[3]}')
 cmd(0x23,0); info=cmd(0x28); check(info[3]==cnt-1,'delete -> count-1')
