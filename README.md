@@ -33,7 +33,7 @@ Not done yet: NFC tap to change slides, buttons, low-power tuning, removal of th
 
 1. Flash the firmware (see `firmware/README.md`; back up the stock flash first).
 2. Open the page in Chrome (Android, Windows, macOS, Linux). iPhone: Safari has no Web Bluetooth.
-3. **Connect**, pick the tag (`badge154`).
+3. **Connect**, pick the tag (`badge154-XXXXXX`, the last three bytes of its Bluetooth address).
 4. Choose pictures, look at the preview and the size line, **Upload to the tag**.
 5. Set the interval and the order, **Save to tag**.
 
