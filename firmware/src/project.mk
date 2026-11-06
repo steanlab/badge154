@@ -15,6 +15,7 @@ $(OUT_PATH)/nfc_probe.o \
 $(OUT_PATH)/led.o \
 $(OUT_PATH)/led_link.o \
 $(OUT_PATH)/hwinfo.o \
+$(OUT_PATH)/wdt.o \
 $(OUT_PATH)/nfc.o \
 $(OUT_PATH)/main.o
 
