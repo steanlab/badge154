@@ -22,7 +22,7 @@ def edit(name, pattern, repl, regex=True, count=1, flags=0):
     p.write_text(s)
     print("ok", name, pattern[:50].replace("\n", " "))
 
-for f in ('epd_bwry_154.c', 'epd_bwry_154.h', 'slides.c', 'slides.h', 'splash.h'):
+for f in ('epd_bwry_154.c', 'epd_bwry_154.h', 'slides.c', 'slides.h', 'splash.h', 'nfc_probe.c', 'nfc_probe.h'):
     shutil.copy(here / f, root / f)
 
 # --- pinout of the Hanshow Nebular Pro 154 (ATC_BLE_OEPL preset "200 HS BWRY JD") ---
@@ -39,7 +39,7 @@ edit('epd_spi.h', '#define EPD_POWER_ON() gpio_write(EPD_ENABLE, 0)',
 edit('epd_spi.h', '#define EPD_POWER_OFF() gpio_write(EPD_ENABLE, 1)',
      '#define EPD_POWER_OFF() do { gpio_set_output_en(EPD_ENABLE, 0); gpio_set_input_en(EPD_ENABLE, 1); gpio_setup_up_down_resistor(EPD_ENABLE, PM_PIN_PULLUP_1M); } while (0)', regex=False)
 
-edit('project.mk', r'(\$\(OUT_PATH\)/epd_bwr_154\.o \\\n)', r'\1$(OUT_PATH)/epd_bwry_154.o \\\n$(OUT_PATH)/slides.o \\\n')
+edit('project.mk', r'(\$\(OUT_PATH\)/epd_bwr_154\.o \\\n)', r'\1$(OUT_PATH)/epd_bwry_154.o \\\n$(OUT_PATH)/slides.o \\\n$(OUT_PATH)/nfc_probe.o \\\n')
 
 # --- epd.c: panel model 7 = BWRY 1.54 ---
 edit('epd.c', r'#include "epd_bwr_154.h"', '#include "epd_bwr_154.h"\n#include "epd_bwry_154.h"')
