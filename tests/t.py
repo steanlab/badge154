@@ -141,12 +141,17 @@ codes=[(shown[i]>>sh)&3 for i in range(10000) for sh in (6,4,2,0)]
 check(set(codes)<={0,1} and codes.count(1)>1500 and codes.count(0)>20000,'splash: inverted, white text on black (white px=%d)'%codes.count(1))
 check(all(c==0 for c in codes[:200*8]) and all(c==0 for c in codes[-200*8:]),'splash: black margins at top and bottom')
 gu('fake_time').value+=30; before=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==before,'splash stays until the interval is over')
+r=cmd(0x2C,2); ns=r[7]|(r[8]<<8)|(r[9]<<16)|(r[10]<<24)
+check(r[0]==0x2C and r[2]==2 and r[19]==0x5A,'hardware report: header and end marker')
+check(ns==30,f'hardware report: next change in {ns} s (expected 30)')
+check(r[3]==98 and r[5]==3,f'hardware report: slide blocks {r[3]}, slides {r[5]}')
 seq=[]
 for k in range(5):
     gu('fake_time').value+=61; L.slides_tick(); seq.append(shown[0]>>6)
 check(seq==[0,1,2,0,1],f'auto change sequence after the splash {seq}')
 gu('fake_time').value+=30; before=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==before,'no change before interval')
 cmd(0x26,0,0,0,0); gu('fake_time').value+=9999; before=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==before,'interval 0 = off')
+r=cmd(0x2C,0); check(bytes(r[7:11])==b'\xff\xff\xff\xff','hardware report: interval 0 = no change planned')
 L.slides_init(); info=cmd(0x28); check(info[6]|(info[7]<<8)==0,'config persisted (0)')
 # 9 NFC tap = next slide
 def tap(): 
