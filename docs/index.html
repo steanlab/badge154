@@ -83,7 +83,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.7';  // page version; goes with firmware v18
+const BUILD='1.8';  // page version; goes with firmware v19
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -327,15 +327,15 @@ async function hwReadAll(){
   const a=await hwPage(0),b=await hwPage(1),c=await hwPage(2);
   const mv=u16(a,3),up=u32(a,5),nx=u32(a,9),tx=a[13]>127?a[13]-256:a[13],mtu=u16(a,14),ci=u16(a,16),rs=a[18];
   const mid=[b[3],b[4],b[5]],midHex=hexb(mid),cap=mid[2],flashKB=cap>=10&&cap<=26?Math.round(Math.pow(2,cap)/1024):0;
-  const craw=u16(b,6),ct10=5790-((craw*8400)>>13);
+  const craw=u16(b,6);
   const p0=b[8],p1=b[9],page=u32(b,10),fwsz=u32(b,14);
   const ramUsed=u32(c,3),ramLeft=u32(c,7),blocks=c[11],freeB=c[12],cnt=c[13],iv=u16(c,14);
   let t='';
   t+='BATTERY\n  voltage: '+(mv/1000).toFixed(3)+' V\n\n';
-  t+='CHIP\n  SoC: Telink TLSR8359 family (tag description); the firmware is built with the TLSR8258 SDK; the SoC id cannot be read by software\n';
+  t+='CHIP\n';
   t+='  flash: JEDEC id '+midHex+' = '+(FL_MFG[mid[0]]||'unknown maker 0x'+hex2(mid[0]))+(FL_PART[midHex]?', probably '+FL_PART[midHex]:'')+', '+(flashKB?flashKB+' KB':'size code 0x'+hex2(cap))+'\n';
-  t+='  chip temperature: raw '+craw+'  ~ '+(ct10/10).toFixed(1)+' °C (NOT calibrated: formula 579 - raw*840/8192 from the upstream source)\n';
-  t+='  panel temperature: bytes 0x'+hex2(p0)+' 0x'+hex2(p1)+(page===NONE32?'  (not measured yet)':'  = '+(p0>127?p0-256:p0)+' °C if the first byte is a signed temperature (like similar controllers, NOT verified); measured '+fmtDur(page)+' ago, at the last panel refresh')+'\n\n';
+  t+='  chip temperature (raw): '+craw+'\n';
+  t+='  panel temperature (raw): '+(page===NONE32?'not measured yet':'0x'+hex2(p0)+' 0x'+hex2(p1))+'\n\n';
   t+='MEMORY\n  firmware: '+fwsz+' bytes ('+(fwsz/1024).toFixed(1)+' KB) in the flash, limit 80 KB\n';
   t+='  slides: '+(blocks-freeB)+' of '+blocks+' blocks used ('+(blocks-freeB)*4+' KB used, '+freeB*4+' KB free), '+cnt+' slide(s)\n';
   t+='  flash total: '+(flashKB?flashKB+' KB':'?')+'\n';
