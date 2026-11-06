@@ -4,7 +4,8 @@
 /* Hardware report of the tag (BLE command 0x2C <page>), see docs/HARDWARE.md.
  * Answer: byte0 0x2C, byte1 result, byte2 page, bytes 3..18 data (little endian), byte19 0x5A.
  *   page 0  live:    3-4 battery mV, 5-8 uptime s, 9-12 seconds to the next slide change (0xFFFFFFFF = none),
- *                    13 TX power dBm (signed), 14-15 ATT MTU, 16-17 connection interval (1.25 ms units, 0 = not connected)
+ *                    13 TX power dBm (signed), 14-15 ATT MTU, 16-17 connection interval (1.25 ms units, 0 = not connected),
+ *                    18 restarts since the battery was inserted (watchdog, reset pin, programmer; saturates at 255)
  *   page 1  chip:    3-5 flash JEDEC id (manufacturer, type, capacity code), 6-7 chip temperature sensor raw,
  *                    8-9 panel temperature bytes, 10-13 age of that reading in s (0xFFFFFFFF = none), 14-17 firmware size
  *   page 2  memory:  3-6 RAM used by static data, 7-10 RAM left (for the stack), 11 slide blocks total, 12 free, 13 slides,
