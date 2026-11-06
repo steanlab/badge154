@@ -168,6 +168,11 @@ cmd(0x26,0,0,0,1); check(tap()==0,'flag bit0 = taps disabled'); cmd(0x26,0,0,0,0
 b=gi('wdt_test_calls').value; r=cmd(0x2D); check(r[1]==1 and gi('wdt_test_calls').value==b,'watchdog test without the magic byte is refused')
 r=cmd(0x2D,0x5A); check(r[1]==1 and gi('wdt_test_calls').value==b,'watchdog test with a wrong byte is refused')
 r=cmd(0x2D,0xA5); check(r[1]==0 and gi('wdt_test_calls').value==b+1,'watchdog test with the magic byte reaches the watchdog')
+# hardware report on the tag screen (command 0x2E)
+b=gi('show_count').value; r=cmd(0x2E); check(r[1]==0 and gi('show_count').value==b+1,'hardware report: command draws the screen once')
+img=bytes(shown); check(img[0]==0 and img.count(0)>8000,'hardware report: black background')
+
+z=bytes(50); crc=crc16(z); cmd(0x20,6,1,len(z)&255,len(z)>>8,crc&255,crc>>8,1,0); r=cmd(0x2E); check(r[1]==4,'hardware report refused during an upload'); cmd(0x2A)
 check(gi('write_violations').value==0,'flash write violations = %d'%gi('write_violations').value)
 print('ALL OK' if ok else 'FAILURES')
 sys.exit(0 if ok else 1)
