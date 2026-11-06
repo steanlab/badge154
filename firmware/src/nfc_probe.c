@@ -12,6 +12,11 @@ RAM static uint8_t np_last = 2;  /* last sampled IRQ level, 2 = none yet */
 RAM static uint8_t np_fall = 0;
 RAM static uint8_t np_rise = 0;
 RAM static uint8_t np_seen = 0;  /* bit0: pin was seen low, bit1: pin was seen high */
+/* what the chip reported when the IRQ pin was seen low: index 0 MAIN_IRQ, 1 FIFO_IRQ, 2 AUX_IRQ, 3 RF_STATUS */
+RAM static uint8_t ev_cnt = 0;
+RAM static uint8_t ev_or[4] = {0, 0, 0, 0};
+RAM static uint8_t ev_last[4] = {0, 0, 0, 0};
+RAM static uint8_t ev_first[4] = {0, 0, 0, 0};
 
 static void irq_pin_setup(void)
 {
@@ -19,25 +24,6 @@ static void irq_pin_setup(void)
     gpio_set_output_en(NFC_IRQ, 0);
     gpio_set_input_en(NFC_IRQ, 1);
     gpio_setup_up_down_resistor(NFC_IRQ, PM_PIN_PULLUP_10K);
-}
-
-void nfc_poll(void)
-{
-    uint8_t lv;
-    irq_pin_setup();
-    lv = gpio_read(NFC_IRQ) ? 1 : 0;
-    np_seen |= (uint8_t)(1u << lv);
-    if (np_last != 2 && lv != np_last)
-    {
-        if (lv)
-        {
-            if (np_rise < 255)
-                np_rise++;
-        }
-        else if (np_fall < 255)
-            np_fall++;
-    }
-    np_last = lv;
 }
 
 static uint8_t nfc_rd(uint16_t reg)
@@ -57,6 +43,62 @@ static void nfc_wr(uint16_t reg, uint8_t val)
     send_i2c(NFC_ID, b, 3);
 }
 
+static void nfc_open(void)
+{
+    init_i2c(); /* the I2C block loses its settings in deep sleep */
+    gpio_write(NFC_CS, 1);
+    gpio_set_func(NFC_CS, AS_GPIO);
+    gpio_set_output_en(NFC_CS, 1);
+    gpio_set_input_en(NFC_CS, 0);
+    gpio_write(NFC_CS, 0);
+    sleep_us(500);
+}
+
+static void nfc_close(void)
+{
+    gpio_write(NFC_CS, 1);
+}
+
+void nfc_poll(void)
+{
+    uint8_t lv;
+    irq_pin_setup();
+    lv = gpio_read(NFC_IRQ) ? 1 : 0;
+    np_seen |= (uint8_t)(1u << lv);
+    if (np_last != 2 && lv != np_last)
+    {
+        if (lv)
+        {
+            if (np_rise < 255)
+                np_rise++;
+        }
+        else if (np_fall < 255)
+            np_fall++;
+    }
+    np_last = lv;
+    if (lv == 0)
+    {
+        /* the pin is low: ask the chip why (reading the flags also releases the pin) */
+        uint8_t v[4], k;
+        nfc_open();
+        v[0] = nfc_rd(0xFFF7);
+        v[1] = nfc_rd(0xFFF8);
+        v[2] = nfc_rd(0xFFF9);
+        v[3] = nfc_rd(0xFFF3);
+        nfc_close();
+        if (ev_cnt == 0)
+            for (k = 0; k < 4; k++)
+                ev_first[k] = v[k];
+        for (k = 0; k < 4; k++)
+        {
+            ev_or[k] |= v[k];
+            ev_last[k] = v[k];
+        }
+        if (ev_cnt < 255)
+            ev_cnt++;
+    }
+}
+
 void nfc_probe_run(uint8_t sub, uint8_t arg)
 {
     /* registers of page A / page B, 12 bytes each, stored from byte 7 */
@@ -70,13 +112,7 @@ void nfc_probe_run(uint8_t sub, uint8_t arg)
         np_buf[i] = 0;
     np_buf[0] = 0x2B;
 
-    init_i2c(); /* the I2C block loses its settings in deep sleep */
-    gpio_write(NFC_CS, 1);
-    gpio_set_func(NFC_CS, AS_GPIO);
-    gpio_set_output_en(NFC_CS, 1);
-    gpio_set_input_en(NFC_CS, 0);
-    gpio_write(NFC_CS, 0);
-    sleep_us(500);
+    nfc_open();
 
     ack = test_i2c_device(NFC_ID >> 1);
     np_buf[2] = (uint8_t)(ack | (sub << 4));
@@ -97,15 +133,30 @@ void nfc_probe_run(uint8_t sub, uint8_t arg)
     {
         np_fall = np_rise = np_seen = 0;
         np_last = 2;
+        ev_cnt = 0;
+        for (i = 0; i < 4; i++)
+            ev_or[i] = ev_last[i] = ev_first[i] = 0;
     }
 
-    if (ack && sub != 5)
+    if (sub == 6) /* what was reported at the last IRQ events (no chip access needed) */
+    {
+        np_buf[7] = ev_cnt;
+        for (i = 0; i < 4; i++)
+        {
+            np_buf[8 + i] = ev_or[i];
+            np_buf[12 + i] = ev_last[i];
+        }
+        np_buf[16] = ev_first[0];
+        np_buf[17] = ev_first[2];
+        np_buf[18] = ev_first[3];
+    }
+    else if (ack && sub != 5)
     {
         const uint16_t *tbl = (sub == 1) ? pb : pa;
         for (i = 0; i < 12; i++)
             np_buf[7 + i] = nfc_rd(tbl[i]);
     }
-    gpio_write(NFC_CS, 1);
+    nfc_close();
 }
 
 void nfc_probe_fill(uint8_t *r)
