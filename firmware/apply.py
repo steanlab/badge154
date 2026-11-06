@@ -23,7 +23,7 @@ def edit(name, pattern, repl, regex=True, count=1, flags=0):
     print("ok", name, pattern[:50].replace("\n", " "))
 
 for f in ('epd_bwry_154.c', 'epd_bwry_154.h', 'slides.c', 'slides.h', 'splash.h', 'nfc_probe.c', 'nfc_probe.h',
-          'epd.c', 'epd.h', 'epd_ble_service.c', 'project.mk', 'nfc.c', 'led_link.c', 'led_link.h', 'hwinfo.c', 'hwinfo.h'):  # epd.c .. nfc.c replace the upstream files
+          'epd.c', 'epd.h', 'epd_ble_service.c', 'project.mk', 'nfc.c', 'led_link.c', 'led_link.h', 'hwinfo.c', 'hwinfo.h', 'wdt.c', 'wdt.h'):  # epd.c .. nfc.c replace the upstream files
     shutil.copy(here / f, root / f)
 
 # --- pinout of the Hanshow Nebular Pro 154 (ATC_BLE_OEPL preset "200 HS BWRY JD") ---
@@ -64,6 +64,12 @@ edit('app.c', r'if \(time_reached_period\(Timer_CH_0, 10\)\)\s*\{\s*if \(ble_get
      'if (time_reached_period(Timer_CH_0, 30))\n    {\n        if (!ble_get_connected())\n        {\n            set_led_color(2);\n            WaitMs(1);\n            set_led_color(0);\n        }\n    }', flags=re.S)
 edit('app.c', r'(    else\n    \{\n        blt_pm_proc\(\);\n)(    \})', r'\1        if (led_link_active())\n            bls_pm_setSuspendMask(SUSPEND_DISABLE);\n\2')
 edit('app.c', r'#include "slides.h"', '#include "slides.h"\n#include "led_link.h"')
+
+# --- watchdog (wdt.c): armed at start and after every wake-up, fed at the top of the main loop ---
+edit('app.c', r'#include "led_link.h"', '#include "led_link.h"\n#include "wdt.h"')
+edit('app.c', r'(void user_init_normal\(void\)\n\{[^\n]*\n)', r'\1    wdt_boot();\n    wdt_init();\n')
+edit('app.c', r'(    blc_ll_recoverDeepRetention\(\);\n)', r'\1    wdt_init();\n')
+edit('app.c', r'(_attribute_ram_code_ void main_loop\(void\)\n\{\n)', r'\1    wdt_feed();\n')
 
 # --- time.c: catch up if the main loop was blocked for a while ---
 edit('time.c', r'    if \(clock_time\(\) - last_clock_increase >= one_second_trimmed\)', '    while (clock_time() - last_clock_increase >= one_second_trimmed)')
