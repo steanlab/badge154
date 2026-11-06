@@ -12,9 +12,7 @@ $(OUT_PATH)/epd.o \
 $(OUT_PATH)/epd_bwry_154.o \
 $(OUT_PATH)/slides.o \
 $(OUT_PATH)/nfc_probe.o \
-$(OUT_PATH)/ota.o \
 $(OUT_PATH)/led.o \
-$(OUT_PATH)/uart.o \
 $(OUT_PATH)/nfc.o \
 $(OUT_PATH)/main.o
 
