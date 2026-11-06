@@ -3,9 +3,11 @@
 #include "drivers.h"
 #include "main.h"
 #include "i2c.h"
+#include "time.h"
 #include "nfc_probe.h"
 
 #define NFC_ID 0xAE /* write address; the driver adds the read bit */
+#define TAP_QUIET_S 3   /* a new tap needs this many seconds without any NFC event */
 
 RAM static uint8_t np_buf[20];
 RAM static uint8_t np_last = 2;  /* last sampled IRQ level, 2 = none yet */
@@ -17,6 +19,10 @@ RAM static uint8_t ev_cnt = 0;
 RAM static uint8_t ev_or[4] = {0, 0, 0, 0};
 RAM static uint8_t ev_last[4] = {0, 0, 0, 0};
 RAM static uint8_t ev_first[4] = {0, 0, 0, 0};
+RAM static uint8_t tap_pending = 0;
+RAM static uint8_t tap_cnt = 0;   /* taps recognised since the counters were cleared */
+RAM static uint8_t ev_any = 0;
+RAM static uint32_t ev_time = 0;
 
 static void irq_pin_setup(void)
 {
@@ -96,7 +102,27 @@ void nfc_poll(void)
         }
         if (ev_cnt < 255)
             ev_cnt++;
+        {
+            uint32_t t = get_time();
+            /* MAIN_IRQ bit7 = field on, bit6 = tag selected: the start of a phone session.
+             * While the phone stays near, events keep coming and only refresh ev_time, so one tap = one action. */
+            if ((v[0] & 0xC0) && (!ev_any || (uint32_t)(t - ev_time) >= TAP_QUIET_S))
+            {
+                tap_pending = 1;
+                if (tap_cnt < 255)
+                    tap_cnt++;
+            }
+            ev_any = 1;
+            ev_time = t;
+        }
     }
+}
+
+uint8_t nfc_tap_take(void)
+{
+    uint8_t t = tap_pending;
+    tap_pending = 0;
+    return t;
 }
 
 void nfc_probe_run(uint8_t sub, uint8_t arg)
@@ -134,6 +160,8 @@ void nfc_probe_run(uint8_t sub, uint8_t arg)
         np_fall = np_rise = np_seen = 0;
         np_last = 2;
         ev_cnt = 0;
+        tap_cnt = 0;
+        ev_any = 0;
         for (i = 0; i < 4; i++)
             ev_or[i] = ev_last[i] = ev_first[i] = 0;
     }
@@ -147,7 +175,7 @@ void nfc_probe_run(uint8_t sub, uint8_t arg)
             np_buf[12 + i] = ev_last[i];
         }
         np_buf[16] = ev_first[0];
-        np_buf[17] = ev_first[2];
+        np_buf[17] = tap_cnt;
         np_buf[18] = ev_first[3];
     }
     else if (ack && sub != 5)
