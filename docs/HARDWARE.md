@@ -40,7 +40,7 @@ Do not use OTA with this firmware; flash over UART.
   Writes only clear bits; erase before write.
 - BLE: the GATT table of the upstream firmware has the characteristic `4b646063-6264-f3a7-8941-e65356ea82fe` in the service
   `13187b10-eba9-a3ba-044e-83d3217d9a38`. The attribute has a write callback. The receive FIFO is 64 x 8 bytes, so writes are
-  kept to 20 bytes (the default ATT MTU of 23). The advertised name is `ESL_xxxxxx`.
+  kept to 20 bytes (the default ATT MTU of 23). The upstream firmware advertises `ESL_xxxxxx` (the name sits in the scan response); badge154 advertises `badge154`, inside the advertising packet itself.
 - Connection parameters are in units of 1.25 ms; the upstream firmware asks for 200 (250 ms) to save power; the uploader asks for 16 (20 ms).
 - Time: `get_time()` counts seconds from the 16 MHz system timer with a fixed trim constant (`time_trime = 5000`). Its accuracy over
   hours has not been measured.
