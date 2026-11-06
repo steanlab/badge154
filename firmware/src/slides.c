@@ -21,8 +21,8 @@
 /* ---------------------------------------------------------------------------------------------
  * constants
  * ------------------------------------------------------------------------------------------- */
-#define SL_BASE       0x20000u
-#define SL_SECTORS    86u
+#define SL_BASE       0x14000u
+#define SL_SECTORS    98u
 #define SL_SECSZ      4096u
 #define SL_HDR        16u
 #define SL_MAGIC      0x4C53u
