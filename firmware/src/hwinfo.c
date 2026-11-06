@@ -69,6 +69,91 @@ static void put32(uint8_t *r, uint32_t v)
     put16(r + 2, (uint16_t)(v >> 16));
 }
 
+static char *cat(char *p, const char *s)
+{
+    while (*s)
+        *p++ = *s++;
+    return p;
+}
+
+static char *dec(char *p, uint32_t v)
+{
+    char t[10];
+    uint8_t n = 0;
+    do
+    {
+        t[n++] = (char)('0' + v % 10);
+        v /= 10;
+    } while (v);
+    while (n)
+        *p++ = t[--n];
+    return p;
+}
+
+void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s)
+{
+    uint8_t mid[4] = {0, 0, 0, 0}, hdr[4] = {0, 0, 0, 0}, i;
+    uint32_t mv = get_battery_mv(), fw, e = (uint32_t)&_end_bss_, kb10;
+    char *p;
+
+    for (i = 0; i < TXT_LINES; i++)
+        ln[i][0] = 0;
+
+    p = cat(ln[0], "BATTERY ");
+    p = dec(p, mv / 1000);
+    *p++ = '.';
+    *p++ = (char)('0' + mv / 100 % 10);
+    *p++ = (char)('0' + mv / 10 % 10);
+    *p++ = (char)('0' + mv % 10);
+    p = cat(p, " V");
+    *p = 0;
+
+    flash_read_page(0x18, 4, hdr); /* the image header holds the firmware size */
+    fw = (uint32_t)hdr[0] | ((uint32_t)hdr[1] << 8) | ((uint32_t)hdr[2] << 16) | ((uint32_t)hdr[3] << 24);
+    kb10 = fw * 10 / 1024;
+    p = cat(ln[1], "FW ");
+    p = dec(p, kb10 / 10);
+    *p++ = '.';
+    *p++ = (char)('0' + kb10 % 10);
+    p = cat(p, "/80 KB");
+    *p = 0;
+
+    p = cat(ln[2], "SLIDES ");
+    p = dec(p, s->count);
+    *p = 0;
+
+    p = cat(ln[3], "BLOCKS ");
+    p = dec(p, (uint32_t)(s->sectors - s->free_sectors));
+    *p++ = '/';
+    p = dec(p, s->sectors);
+    *p = 0;
+
+    fl_read_mid(mid);
+    p = cat(ln[4], "FLASH ");
+    if (mid[2] >= 10 && mid[2] <= 26)
+    {
+        uint32_t k = 1u << (mid[2] - 10);
+        if (k >= 1024)
+            p = cat(dec(p, k / 1024), " MB");
+        else
+            p = cat(dec(p, k), " KB");
+    }
+    else
+        *p++ = '?';
+    *p = 0;
+
+    p = cat(ln[5], "RAM ");
+    p = dec(p, SRAM_END - e);
+    p = cat(p, " B FREE");
+    *p = 0;
+
+    p = cat(ln[6], "TX POWER ");
+    *p++ = TX_DBM < 0 ? '-' : '+';
+    p = dec(p, (uint32_t)(TX_DBM < 0 ? -TX_DBM : TX_DBM));
+    p = cat(p, " DBM");
+    *p = 0;
+}
+
 void hwinfo_fill(uint8_t page, uint8_t *r, const hw_slides_t *s)
 {
     uint8_t i;
