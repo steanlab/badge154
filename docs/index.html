@@ -68,6 +68,7 @@
  <p>Write size <select id="chunk"><option value="19">19 bytes (default)</option><option value="10">10 bytes (slow, safest)</option></select>
  <label><input type="checkbox" id="forceraw"> do not compress</label></p>
  <p><button class="act" id="info">Read status</button></p>
+ <p><button class="act" id="wdTest">Watchdog test</button> <span class="hint">the tag hangs on purpose and must restart by itself in about 8 s (the connection drops, the splash screen is drawn again)</span></p>
 </details>
 <details><summary>NFC probe (diagnostics)</summary>
  <p class="hint">Hold the phone against the tag and press the buttons. IRQ = level of the chip's interrupt pin (PC4); edges are counted by the tag between reads.</p>
@@ -82,7 +83,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.6';  // page version; goes with firmware v17
+const BUILD='1.7';  // page version; goes with firmware v18
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -324,7 +325,7 @@ async function hwPage(p){
 function hexb(a){return a.map(v=>hex2(v)).join('');}
 async function hwReadAll(){
   const a=await hwPage(0),b=await hwPage(1),c=await hwPage(2);
-  const mv=u16(a,3),up=u32(a,5),nx=u32(a,9),tx=a[13]>127?a[13]-256:a[13],mtu=u16(a,14),ci=u16(a,16);
+  const mv=u16(a,3),up=u32(a,5),nx=u32(a,9),tx=a[13]>127?a[13]-256:a[13],mtu=u16(a,14),ci=u16(a,16),rs=a[18];
   const mid=[b[3],b[4],b[5]],midHex=hexb(mid),cap=mid[2],flashKB=cap>=10&&cap<=26?Math.round(Math.pow(2,cap)/1024):0;
   const craw=u16(b,6),ct10=5790-((craw*8400)>>13);
   const p0=b[8],p1=b[9],page=u32(b,10),fwsz=u32(b,14);
@@ -339,7 +340,7 @@ async function hwReadAll(){
   t+='  slides: '+(blocks-freeB)+' of '+blocks+' blocks used ('+(blocks-freeB)*4+' KB used, '+freeB*4+' KB free), '+cnt+' slide(s)\n';
   t+='  flash total: '+(flashKB?flashKB+' KB':'?')+'\n';
   t+='  RAM: static data '+ramUsed+' bytes of 65536, '+ramLeft+' bytes left for the stack\n\n';
-  t+='TIME\n  running since power-on: '+fmtDur(up)+'\n';
+  t+='TIME\n  running since the last start: '+fmtDur(up)+'\n  restarts since the battery was inserted: '+rs+(rs>=255?'+':'')+' (watchdog, reset pin or wire flashing)\n';
   t+='  next slide change: '+(nx===NONE32?'not planned (interval 0 or fewer than 2 slides)':'in '+fmtDur(nx)+' (does not happen while this page is connected)')+'  [interval '+iv+' min]\n\n';
   t+='BLE\n  TX power: '+(tx>0?'+':'')+tx+' dBm (set in the firmware)\n  ATT MTU: '+mtu+'\n  connection interval: '+(ci*1.25).toFixed(2)+' ms\n';
   $('hwOut').textContent=t;
@@ -351,6 +352,7 @@ async function hwPriv(){
 }
 $('hwRead').onclick=()=>run(hwReadAll);
 $('hwPrivBtn').onclick=()=>run(hwPriv);
+$('wdTest').onclick=()=>run(async()=>{need();if(!confirm('The tag will hang and restart in about 8 s, the splash screen will be drawn. Continue?'))return;await wr([0x2D,0xA5]);log('watchdog test sent: the tag now hangs, it must restart by itself in about 8 s');});
 // ---- NFC probe ----
 const NFC_A=['FFF3 RF_STATUS','FFF7 MAIN_IRQ','FFF8 FIFO_IRQ','FFF9 AUX_IRQ','FFFA MAIN_MASK','FFFB FIFO_MASK','FFFC AUX_MASK','FFFD NFC_CFG','FFE0','FFE1','FFE2','FFE7'];
 const NFC_B=['03B0','03B1','03B2','03B3','03B4','03B5','03B6','03B7','FFF2 FIFO_WORDCNT','FFF4 RF_TXEN','FFF5 RF_BAUD','FFF6 RF_RATS'];
