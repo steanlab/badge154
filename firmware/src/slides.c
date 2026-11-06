@@ -805,12 +805,30 @@ void slides_init(void)
     last_change = get_time();
 }
 
+/* While a phone is connected the LED runs through red - green - blue (300 ms each); it is switched off after the disconnect */
+RAM static uint8_t led_link_on = 0;
+static void led_link_indicator(void)
+{
+    if (ble_get_connected())
+    {
+        uint32_t ph = (clock_time() / (CLOCK_SYS_CLOCK_1MS * 300u)) % 3u;
+        set_led_color((int)(ph + 1u)); /* 1 red, 2 green, 3 blue */
+        led_link_on = 1;
+    }
+    else if (led_link_on)
+    {
+        led_link_on = 0;
+        set_led_color(0);
+    }
+}
+
 void slides_tick(void)
 {
     extern uint8_t epd_update_state;
     uint8_t tap;
 
     nfc_poll();
+    led_link_indicator();
     tap = nfc_tap_take(); /* a tap during a panel refresh is dropped */
     if (list_mode == 1)
         resp_list();
