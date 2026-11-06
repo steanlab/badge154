@@ -20,6 +20,8 @@ int ble_get_connected(void){ return fake_conn; }
 void ble_set_connection_speed(uint16_t s){ (void)s; }
 void EPD_BWRY_154_show(const uint8_t *img){ memcpy(shown, img, 10000); show_count++; }
 void host_reset(void){ memset(flash_mem,0xFF,sizeof flash_mem); }
+int fake_tap = 0;
 void nfc_poll(void){}
+uint8_t nfc_tap_take(void){ uint8_t t = (uint8_t)fake_tap; fake_tap = 0; return t; }
 void nfc_probe_run(uint8_t s, uint8_t a){(void)s;(void)a;}
 void nfc_probe_fill(uint8_t *r){ r[0]=0x2B; r[1]=0; r[19]=0x5A; }
