@@ -66,7 +66,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.0';  // page version; goes with firmware v1
+const BUILD='1.1';  // page version; goes with firmware v3
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -231,7 +231,7 @@ async function run(fn){
 }
 $('connect').onclick=()=>run(async()=>{
   if(!navigator.bluetooth)throw new Error('Web Bluetooth is not available in this browser');
-  dev=await navigator.bluetooth.requestDevice($('alldev').checked?{acceptAllDevices:true,optionalServices:[SERV]}:{filters:[{namePrefix:'ESL_'}],optionalServices:[SERV]});
+  dev=await navigator.bluetooth.requestDevice($('alldev').checked?{acceptAllDevices:true,optionalServices:[SERV]}:{filters:[{namePrefix:'badge154'},{namePrefix:'ESL_'}],optionalServices:[SERV]});
   dev.addEventListener('gattserverdisconnected',()=>{setState('disconnected');chr=null;});
   setState('connecting...');
   const srv=await dev.gatt.connect();const svc=await srv.getPrimaryService(SERV);chr=await svc.getCharacteristic(CHAR);
