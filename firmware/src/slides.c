@@ -80,7 +80,8 @@ static void fl_read(uint32_t addr, unsigned int len, uint8_t *buf)
     flash_read_page(addr, len, buf);
 }
 
-/* write len bytes, split at 256-byte page borders; the target area must be erased */
+/* write len bytes, split at 256-byte page borders; the target area must be erased.
+ * buf must be in RAM, never in the flash (const data): the flash cannot be read while it is being programmed. */
 static void fl_write(uint32_t addr, const uint8_t *buf, unsigned int len)
 {
     while (len)
@@ -243,7 +244,9 @@ static int find_run(unsigned int need)
 
 static void slot_delete(uint8_t slot)
 {
-    static const uint8_t zero[2] = {0, 0};
+    uint8_t zero[2]; /* must be in RAM: the flash cannot be read (XIP) while it is being programmed */
+    zero[0] = 0;
+    zero[1] = 0;
     if (slot < SL_MAX_SLOTS && slot_start[slot] != NO_SLOT)
     {
         fl_write(SL_BASE + (uint32_t)slot_start[slot] * SL_SECSZ, zero, 2); /* magic -> 0: no longer a slide */
