@@ -22,7 +22,8 @@ def edit(name, pattern, repl, regex=True, count=1, flags=0):
     p.write_text(s)
     print("ok", name, pattern[:50].replace("\n", " "))
 
-for f in ('epd_bwry_154.c', 'epd_bwry_154.h', 'slides.c', 'slides.h', 'splash.h', 'nfc_probe.c', 'nfc_probe.h'):
+for f in ('epd_bwry_154.c', 'epd_bwry_154.h', 'slides.c', 'slides.h', 'splash.h', 'nfc_probe.c', 'nfc_probe.h',
+          'epd.c', 'epd.h', 'epd_ble_service.c', 'project.mk'):  # the last four replace the upstream files
     shutil.copy(here / f, root / f)
 
 # --- pinout of the Hanshow Nebular Pro 154 (ATC_BLE_OEPL preset "200 HS BWRY JD") ---
@@ -39,29 +40,15 @@ edit('epd_spi.h', '#define EPD_POWER_ON() gpio_write(EPD_ENABLE, 0)',
 edit('epd_spi.h', '#define EPD_POWER_OFF() gpio_write(EPD_ENABLE, 1)',
      '#define EPD_POWER_OFF() do { gpio_set_output_en(EPD_ENABLE, 0); gpio_set_input_en(EPD_ENABLE, 1); gpio_setup_up_down_resistor(EPD_ENABLE, PM_PIN_PULLUP_1M); } while (0)', regex=False)
 
-edit('project.mk', r'(\$\(OUT_PATH\)/epd_bwr_154\.o \\\n)', r'\1$(OUT_PATH)/epd_bwry_154.o \\\n$(OUT_PATH)/slides.o \\\n$(OUT_PATH)/nfc_probe.o \\\n')
-
-# --- epd.c: panel model 7 = BWRY 1.54 ---
-edit('epd.c', r'#include "epd_bwr_154.h"', '#include "epd_bwr_154.h"\n#include "epd_bwry_154.h"')
-edit('epd.c', r'RAM uint8_t epd_model = 0;', 'RAM uint8_t epd_model = 7;')
-edit('epd.c', r'"BWY350"\}', '"BWY350", "BWRY154"}')
-edit('epd.c', r'(uint8_t EPD_read_temp\(void\)\s*\{)', r'\1\n    if (epd_model == 7)\n        return 20;')
-edit('epd.c', r'(epd_temperature = EPD_BWY_350_Display\(image, size, full_or_partial\);)',
-     r'\1\n    else if (epd_model == 7)\n        epd_temperature = EPD_BWRY_154_Display(image, size, full_or_partial);')
-edit('epd.c', r'(EPD_BWY_350_set_sleep\(\);)', r'\1\n    else if (epd_model == 7)\n        EPD_BWRY_154_set_sleep();')
-edit('epd.c', r'if \(epd_model == 1\)(\s*)\{(\s*)if \(!EPD_IS_BUSY\(\)\)',
-     'if (epd_model == 7)\n        {\n            if (EPD_BWRY_154_done())\n                epd_set_sleep();\n        }\n        else if (epd_model == 1)\\1{\\2if (!EPD_IS_BUSY())')
-
-# --- RAM: the SRAM ends at 0x850000 and the stack grows down from there. The TIFF decoder object (13.5 KB) of the upstream firmware
-#     is not needed here; without this edit the 10 KB slide buffer pushes .bss past the end of the SRAM and breaks the BLE stack ---
-edit('epd.c', r"TIFFIMAGE tiff;", "/* TIFFIMAGE tiff;  removed: 13.5 KB of RAM, not used by the slideshow */")
-edit('epd.c', r"    TIFF_openRAW\(&tiff,.*?TIFF_close\(&tiff\);\n", "", flags=re.S)
-
 # --- app.c: no clock any more; slideshow instead ---
+edit('app.c', r'#include "bart_tif.h"\n', '')
 edit('app.c', r'#include "time.h"', '#include "time.h"\n#include "slides.h"')
 edit('app.c', r'(    init_flash\(\);\n)', r'\1    slides_init();\n')
 edit('app.c', r'(    handler_time\(\);\n)', r'\1    slides_tick();\n')
 edit('app.c', r'    uint8_t current_minute = .*?(    if \(time_reached_period\(Timer_CH_0, 10\)\))', r'\1', flags=re.S)
+
+# --- ble.c: the old text command parser (settings of the thermometer firmware) is not needed ---
+edit('ble.c', r'\tcmd_parser\(p\);\n', '')
 
 # --- time.c: catch up if the main loop was blocked for a while ---
 edit('time.c', r'    if \(clock_time\(\) - last_clock_increase >= one_second_trimmed\)', '    while (clock_time() - last_clock_increase >= one_second_trimmed)')
@@ -70,11 +57,6 @@ edit('time.c', r'    if \(clock_time\(\) - last_clock_increase >= one_second_tri
 edit('app_att.c', r'static u8 \t  my_EPD_BLE_Data \t+= 0x00;', 'extern u8 my_EPD_BLE_Data[20];')
 edit('app_att.c', r'\{0,ATT_PERMISSIONS_WRITE, 16, sizeof\(my_EPD_BLE_Data\), \(u8\*\)\(&my_EPD_BLEUUID\),\t\(&my_EPD_BLE_Data\),',
      '{0,ATT_PERMISSIONS_RDWR, 16, sizeof(my_EPD_BLE_Data), (u8*)(&my_EPD_BLEUUID),\t(u8*)my_EPD_BLE_Data,')
-
-# --- BLE command routing ---
-edit('epd_ble_service.c', r'#include "epd.h"', '#include "epd.h"\n#include "epd_bwry_154.h"\n#include "slides.h"')
-edit('epd_ble_service.c', r'(\tcase 0x04:)',
-     '\t// slideshow commands\n\tcase 0x20 ... 0x2F:\n\t\treturn slides_ble_cmd(payload, payload_len);\n\t// BWRY test: 10 <pattern> <seq> <flags>\n\tcase 0x10:\n\t\tASSERT_MIN_LEN(payload_len, 4);\n\t\tble_set_connection_speed(200);\n\t\tEPD_BWRY_154_test(payload[1], payload[2], payload[3]);\n\t\treturn 0;\n\\1')
 
 # --- Bluetooth name: "badge154-XXXXXX" (XXXXXX = last three MAC bytes, as upstream). The full name is in the scan response;
 #     the advertising packet carries the shortened name "badge154" so that name filters of browsers match reliably ---
