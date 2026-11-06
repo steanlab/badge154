@@ -71,10 +71,12 @@ edit('epd_ble_service.c', r'#include "epd.h"', '#include "epd.h"\n#include "epd_
 edit('epd_ble_service.c', r'(\tcase 0x04:)',
      '\t// slideshow commands\n\tcase 0x20 ... 0x2F:\n\t\treturn slides_ble_cmd(payload, payload_len);\n\t// BWRY test: 10 <pattern> <seq> <flags>\n\tcase 0x10:\n\t\tASSERT_MIN_LEN(payload_len, 4);\n\t\tble_set_connection_speed(200);\n\t\tEPD_BWRY_154_test(payload[1], payload[2], payload[3]);\n\t\treturn 0;\n\\1')
 
-# --- Bluetooth name: "badge154", also inside the advertising packet (the upstream puts the name only in the scan response) ---
+# --- Bluetooth name: "badge154-XXXXXX" (XXXXXX = last three MAC bytes, as upstream). The full name is in the scan response;
+#     the advertising packet carries the shortened name "badge154" so that name filters of browsers match reliably ---
 edit('ble.c', r"RAM uint8_t ble_name\[\] = \{11, 0x09, 'E', 'S', 'L', '_', '0', '0', '0', '0', '0', '0'\};",
-     "RAM uint8_t ble_name[] = {9, 0x09, 'b', 'a', 'd', 'g', 'e', '1', '5', '4'};")
-edit('ble.c', r"\t// Set the BLE Name to the last three MACs.*?ble_name\[11\] = hex_ascii\[mac_public\[0\] & 0x0f\];\n", "", flags=re.S)
+     "RAM uint8_t ble_name[] = {16, 0x09, 'b', 'a', 'd', 'g', 'e', '1', '5', '4', '-', '0', '0', '0', '0', '0', '0'};")
+edit('ble.c', r"(hex_ascii = \{\"0123456789ABCDEF\"\};\n)\tble_name\[6\](.*?)\tble_name\[7\](.*?)\tble_name\[8\](.*?)\tble_name\[9\](.*?)\tble_name\[10\](.*?)\tble_name\[11\]",
+     r"\1\tble_name[11]\2\tble_name[12]\3\tble_name[13]\4\tble_name[14]\5\tble_name[15]\6\tble_name[16]", flags=re.S)
 edit('ble.c', r"(/\*Counter\*/ 0x00)\};",
-     r"\1,\n\t/*Name*/ 9, 0x09, 'b', 'a', 'd', 'g', 'e', '1', '5', '4',\n\t/*Flags*/ 2, 0x01, 0x06};")
+     r"\1,\n\t/*Name*/ 9, 0x08, 'b', 'a', 'd', 'g', 'e', '1', '5', '4',\n\t/*Flags*/ 2, 0x01, 0x06};")
 print("all edits applied")
