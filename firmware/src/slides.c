@@ -14,6 +14,7 @@
 #endif
 
 #include "slides.h"
+#include "splash.h"
 
 /* ---------------------------------------------------------------------------------------------
  * constants
@@ -380,6 +381,25 @@ static int lz4_decode(uint8_t *dst, unsigned int dlen)
     return o == dlen ? 0 : -1;
 }
 
+/* 1 bit per pixel (bit set = pal1) -> 2 bits per pixel in slide_img. src may be the upper half of slide_img itself:
+   the output never overtakes the input. */
+static void expand_1bpp(const uint8_t *src, uint8_t pal0, uint8_t pal1)
+{
+    unsigned int i;
+    for (i = 0; i < IMG_BYTES / 2; i++)
+    {
+        uint8_t s = src[i];
+        uint8_t o0 = 0, o1 = 0, k;
+        for (k = 0; k < 4; k++)
+        {
+            o0 = (uint8_t)((o0 << 2) | ((s & (0x80 >> k)) ? pal1 : pal0));
+            o1 = (uint8_t)((o1 << 2) | ((s & (0x08 >> k)) ? pal1 : pal0));
+        }
+        slide_img[2 * i] = o0;
+        slide_img[2 * i + 1] = o1;
+    }
+}
+
 /* decode slot into slide_img; returns 0 on success */
 static int slide_load(uint8_t slot)
 {
@@ -427,20 +447,7 @@ static int slide_load(uint8_t slot)
         return -1;
 
     if (flags & F_1BPP)
-    {
-        for (i = 0; i < IMG_BYTES / 2; i++)
-        {
-            uint8_t s = slide_img[IMG_BYTES / 2 + i];
-            uint8_t o0 = 0, o1 = 0, k;
-            for (k = 0; k < 4; k++)
-            {
-                o0 = (uint8_t)((o0 << 2) | ((s & (0x80 >> k)) ? pal1 : pal0));
-                o1 = (uint8_t)((o1 << 2) | ((s & (0x08 >> k)) ? pal1 : pal0));
-            }
-            slide_img[2 * i] = o0;
-            slide_img[2 * i + 1] = o1;
-        }
-    }
+        expand_1bpp(slide_img + IMG_BYTES / 2, pal0, pal1);
     return 0;
 }
 
@@ -483,6 +490,15 @@ static uint8_t next_slot(int dir)
         return playlist[i >= pl_count ? 0 : i];
     }
     return playlist[i == 0 ? pl_count - 1 : i - 1];
+}
+
+/* start-up screen: black text on white, fixed in the firmware (tools/make_splash.py) */
+static void do_show_splash(void)
+{
+    expand_1bpp(splash_1bpp, 1, 0);
+    cur_slot = NO_SLOT;
+    last_change = get_time();
+    EPD_BWRY_154_show(slide_img);
 }
 
 static int do_show(uint8_t slot)
@@ -538,6 +554,7 @@ static void resp_list(void)
     for (i = 0; i < SL_MAX_SLOTS; i++)
         if (slot_start[i] != NO_SLOT)
             r[2 + (i >> 3)] |= (uint8_t)(1 << (i & 7)); /* bytes 2..16: bitmap of the slots in use */
+    r[19] = 0x5A;                                       /* every answer ends with 0x5A, the page checks it */
 }
 
 RAM static uint8_t list_mode = 0;
@@ -812,17 +829,16 @@ void slides_tick(void)
         if (get_time() >= 3)
         {
             boot_done = 1;
-            if (pl_count)
-            {
-                uint8_t s = next_slot(0);
-                if (s != NO_SLOT)
-                    do_show(s);
-            }
+            set_led_color(3); /* one blue blink: the start-up splash begins */
+            WaitMs(200);
+            set_led_color(0);
+            WaitMs(200);
+            do_show_splash(); /* every start (new battery, reset) begins with the splash; the slides follow after the interval */
         }
         return;
     }
 
-    if (cfg.interval_min && pl_count > 1 && !up_active && !ble_get_connected() &&
+    if (cfg.interval_min && (pl_count > 1 || (pl_count == 1 && cur_slot == NO_SLOT)) && !up_active && !ble_get_connected() &&
         (uint32_t)(get_time() - last_change) >= (uint32_t)cfg.interval_min * 60u)
     {
         uint8_t s = next_slot(0);
