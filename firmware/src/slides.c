@@ -15,6 +15,7 @@
 
 #include "slides.h"
 #include "splash.h"
+#include "nfc_probe.h"
 
 /* ---------------------------------------------------------------------------------------------
  * constants
@@ -776,6 +777,10 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
     case 0x29: /* LIST */
         list_mode = 1;
         break;
+    case 0x2B: /* NFC probe: sub, arg */
+        nfc_probe_run(len > 1 ? p[1] : 0, len > 2 ? p[2] : 0);
+        list_mode = 2;
+        break;
     case 0x2A: /* ABORT upload */
         up_abort();
         ble_set_connection_speed(200);
@@ -804,8 +809,11 @@ void slides_tick(void)
 {
     extern uint8_t epd_update_state;
 
-    if (list_mode)
+    nfc_poll();
+    if (list_mode == 1)
         resp_list();
+    else if (list_mode == 2)
+        nfc_probe_fill(my_EPD_BLE_Data);
     else
         resp_update();
 
