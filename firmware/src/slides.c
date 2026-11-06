@@ -808,8 +808,10 @@ void slides_init(void)
 void slides_tick(void)
 {
     extern uint8_t epd_update_state;
+    uint8_t tap;
 
     nfc_poll();
+    tap = nfc_tap_take(); /* a tap during a panel refresh is dropped */
     if (list_mode == 1)
         resp_list();
     else if (list_mode == 2)
@@ -842,6 +844,19 @@ void slides_tick(void)
             set_led_color(0);
             WaitMs(200);
             do_show_splash(); /* every start (new battery, reset) begins with the splash; the slides follow after the interval */
+        }
+        return;
+    }
+
+    if (tap && !(cfg.flags & 1) && !up_active && !ble_get_connected())
+    {
+        uint8_t s = next_slot(0); /* NFC tap = next slide */
+        if (s != NO_SLOT)
+        {
+            set_led_color(3); /* short blue blink: tap recognised */
+            WaitMs(80);
+            set_led_color(0);
+            do_show(s);
         }
         return;
     }
