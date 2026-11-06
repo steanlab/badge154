@@ -138,8 +138,8 @@ base=gi('show_count').value
 gu('fake_time').value=10; L.slides_tick(); L.slides_tick()   # boot show
 check(gi('show_count').value==base+1,'boot: exactly one refresh (splash) after 3 s')
 codes=[(shown[i]>>sh)&3 for i in range(10000) for sh in (6,4,2,0)]
-check(set(codes)<={0,1} and codes.count(0)>1500 and codes.count(1)>20000,'splash: only black and white, text present (black px=%d)'%codes.count(0))
-check(all(c==1 for c in codes[:200*8]) and all(c==1 for c in codes[-200*8:]),'splash: blank margins at top and bottom')
+check(set(codes)<={0,1} and codes.count(1)>1500 and codes.count(0)>20000,'splash: inverted, white text on black (white px=%d)'%codes.count(1))
+check(all(c==0 for c in codes[:200*8]) and all(c==0 for c in codes[-200*8:]),'splash: black margins at top and bottom')
 gu('fake_time').value+=30; before=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==before,'splash stays until the interval is over')
 seq=[]
 for k in range(5):
