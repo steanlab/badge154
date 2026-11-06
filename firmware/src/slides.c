@@ -17,6 +17,7 @@
 #include "splash.h"
 #include "nfc_probe.h"
 #include "led_link.h"
+#include "hwinfo.h"
 
 /* ---------------------------------------------------------------------------------------------
  * constants
@@ -545,6 +546,28 @@ static void resp_update(void)
     r[19] = 0x5A;
 }
 
+/* seconds to the next automatic change, 0xFFFFFFFF = none planned (the change also waits for the page to disconnect) */
+static uint32_t next_change_s(void)
+{
+    uint32_t total, el;
+    if (!cfg.interval_min || up_active || !(pl_count > 1 || (pl_count == 1 && cur_slot == NO_SLOT)))
+        return 0xFFFFFFFFu;
+    total = (uint32_t)cfg.interval_min * 60u;
+    el = (uint32_t)(get_time() - last_change);
+    return el >= total ? 0u : total - el;
+}
+
+static void resp_hw(uint8_t page)
+{
+    hw_slides_t h;
+    h.next_s = next_change_s();
+    h.sectors = (uint8_t)SL_SECTORS;
+    h.free_sectors = (uint8_t)free_sectors();
+    h.count = pl_count;
+    h.interval_min = cfg.interval_min;
+    hwinfo_fill(page, my_EPD_BLE_Data, &h);
+}
+
 static void resp_list(void)
 {
     uint8_t *r = my_EPD_BLE_Data;
@@ -782,6 +805,10 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
         nfc_probe_run(len > 1 ? p[1] : 0, len > 2 ? p[2] : 0);
         list_mode = 2;
         break;
+    case 0x2C: /* hardware report: page */
+        resp_hw(len > 1 ? p[1] : 0);
+        list_mode = 3; /* the answer stays in the status buffer */
+        break;
     case 0x2A: /* ABORT upload */
         up_abort();
         ble_set_connection_speed(200);
@@ -818,6 +845,8 @@ void slides_tick(void)
         resp_list();
     else if (list_mode == 2)
         nfc_probe_fill(my_EPD_BLE_Data);
+    else if (list_mode == 3)
+        ; /* hardware report: written by the command */
     else
         resp_update();
 
