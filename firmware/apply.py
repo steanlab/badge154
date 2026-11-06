@@ -22,7 +22,7 @@ def edit(name, pattern, repl, regex=True, count=1, flags=0):
     p.write_text(s)
     print("ok", name, pattern[:50].replace("\n", " "))
 
-for f in ('epd_bwry_154.c', 'epd_bwry_154.h', 'slides.c', 'slides.h'):
+for f in ('epd_bwry_154.c', 'epd_bwry_154.h', 'slides.c', 'slides.h', 'splash.h'):
     shutil.copy(here / f, root / f)
 
 # --- pinout of the Hanshow Nebular Pro 154 (ATC_BLE_OEPL preset "200 HS BWRY JD") ---
@@ -51,6 +51,11 @@ edit('epd.c', r'(epd_temperature = EPD_BWY_350_Display\(image, size, full_or_par
 edit('epd.c', r'(EPD_BWY_350_set_sleep\(\);)', r'\1\n    else if (epd_model == 7)\n        EPD_BWRY_154_set_sleep();')
 edit('epd.c', r'if \(epd_model == 1\)(\s*)\{(\s*)if \(!EPD_IS_BUSY\(\)\)',
      'if (epd_model == 7)\n        {\n            if (EPD_BWRY_154_done())\n                epd_set_sleep();\n        }\n        else if (epd_model == 1)\\1{\\2if (!EPD_IS_BUSY())')
+
+# --- RAM: the SRAM ends at 0x850000 and the stack grows down from there. The TIFF decoder object (13.5 KB) of the upstream firmware
+#     is not needed here; without this edit the 10 KB slide buffer pushes .bss past the end of the SRAM and breaks the BLE stack ---
+edit('epd.c', r"TIFFIMAGE tiff;", "/* TIFFIMAGE tiff;  removed: 13.5 KB of RAM, not used by the slideshow */")
+edit('epd.c', r"    TIFF_openRAW\(&tiff,.*?TIFF_close\(&tiff\);\n", "", flags=re.S)
 
 # --- app.c: no clock any more; slideshow instead ---
 edit('app.c', r'#include "time.h"', '#include "time.h"\n#include "slides.h"')
