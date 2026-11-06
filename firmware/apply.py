@@ -70,4 +70,11 @@ edit('app_att.c', r'\{0,ATT_PERMISSIONS_WRITE, 16, sizeof\(my_EPD_BLE_Data\), \(
 edit('epd_ble_service.c', r'#include "epd.h"', '#include "epd.h"\n#include "epd_bwry_154.h"\n#include "slides.h"')
 edit('epd_ble_service.c', r'(\tcase 0x04:)',
      '\t// slideshow commands\n\tcase 0x20 ... 0x2F:\n\t\treturn slides_ble_cmd(payload, payload_len);\n\t// BWRY test: 10 <pattern> <seq> <flags>\n\tcase 0x10:\n\t\tASSERT_MIN_LEN(payload_len, 4);\n\t\tble_set_connection_speed(200);\n\t\tEPD_BWRY_154_test(payload[1], payload[2], payload[3]);\n\t\treturn 0;\n\\1')
+
+# --- Bluetooth name: "badge154", also inside the advertising packet (the upstream puts the name only in the scan response) ---
+edit('ble.c', r"RAM uint8_t ble_name\[\] = \{11, 0x09, 'E', 'S', 'L', '_', '0', '0', '0', '0', '0', '0'\};",
+     "RAM uint8_t ble_name[] = {9, 0x09, 'b', 'a', 'd', 'g', 'e', '1', '5', '4'};")
+edit('ble.c', r"\t// Set the BLE Name to the last three MACs.*?ble_name\[11\] = hex_ascii\[mac_public\[0\] & 0x0f\];\n", "", flags=re.S)
+edit('ble.c', r"(/\*Counter\*/ 0x00)\};",
+     r"\1,\n\t/*Name*/ 9, 0x09, 'b', 'a', 'd', 'g', 'e', '1', '5', '4',\n\t/*Flags*/ 2, 0x01, 0x06};")
 print("all edits applied")
