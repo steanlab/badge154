@@ -8,6 +8,7 @@
 #include "epd_bwry_154.h"
 #include "time.h"
 #include "hwinfo.h"
+#include "wdt.h"
 
 extern uint8_t mac_public[6];
 extern uint32_t _end_bss_; /* linker symbol: end of the static RAM; the stack grows down from 0x850000 */
@@ -86,6 +87,7 @@ void hwinfo_fill(uint8_t page, uint8_t *r, const hw_slides_t *s)
         d[10] = (uint8_t)(int8_t)TX_DBM;
         put16(d + 11, blc_att_getEffectiveMtuSize(0));
         put16(d + 13, bls_ll_getConnectionInterval());
+        d[15] = wdt_restarts();
         break;
     case 1:
     {
