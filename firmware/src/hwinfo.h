@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include "textscr.h"
 
 /* Hardware report of the tag (BLE command 0x2C <page>), see docs/HARDWARE.md.
  * Answer: byte0 0x2C, byte1 result, byte2 page, bytes 3..18 data (little endian), byte19 0x5A.
@@ -22,3 +23,6 @@ typedef struct
 } hw_slides_t;
 
 void hwinfo_fill(uint8_t page, uint8_t *r, const hw_slides_t *s);
+
+/* The same report as short text lines for the tag screen (BLE command 0x2E): battery, firmware, slides, blocks, flash, RAM, TX power. */
+void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s);
