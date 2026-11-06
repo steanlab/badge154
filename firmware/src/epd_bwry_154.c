@@ -6,6 +6,7 @@
 #include "epd_bwry_154.h"
 #include "drivers.h"
 #include "stack/ble/ble.h"
+#include "time.h"
 
 /* Driver for the 1.54" 200 x 200 four-colour (black / white / yellow / red) panel of the
  * Hanshow Nebular Pro 154. See docs/HARDWARE.md for what is verified and what is not.
@@ -42,6 +43,8 @@ extern uint8_t epd_update_state;
 RAM static uint32_t bwry_refresh_start = 0;
 RAM static uint8_t  bwry_busy_active_high = 0;
 RAM static uint8_t  bwry_timeouts = 0;
+RAM static uint8_t  bwry_temp[2] = {0, 0};     /* the two bytes read after command 0x40 at the last refresh */
+RAM static uint32_t bwry_temp_stamp = 0xFFFFFFFFu; /* get_time() of that reading, 0xFFFFFFFF = none yet */
 
 /* default: BUSY high = idle, BUSY low = busy (JD controller) */
 static _attribute_ram_code_ uint8_t bwry_is_busy(void)
@@ -161,8 +164,9 @@ static _attribute_ram_code_ void bwry_init_jd200(uint8_t flags)
     bwry_wait(400);
     if (!(flags & 0x01))
     {
-        (void)bwry_read_byte();
-        (void)bwry_read_byte();
+        bwry_temp[0] = bwry_read_byte();
+        bwry_temp[1] = bwry_read_byte();
+        bwry_temp_stamp = get_time();
     }
     CMD(0xFF, 0xA5);
     CMD(0xEF, 0x03, 0x44, 0x07, 0x32, 0x07, 0x16, 0x09, 0x33);
@@ -269,6 +273,11 @@ _attribute_ram_code_ void EPD_BWRY_154_show(const uint8_t *img)
     bwry_timeouts = 0;
     bwry_power_and_reset(0);
     bwry_init_jd200(0);
+    /* LED report, as in the test command: one green blink = every BUSY wait ended by itself, N red blinks = N timeouts */
+    if (bwry_timeouts == 0)
+        bwry_blink(2, 1);
+    else
+        bwry_blink(1, bwry_timeouts);
     for (i = 0; i < BW * BH / 4; i++)
         EPD_WriteData(img[i]);
     CMD(0x12, 0x00); /* refresh */
@@ -302,4 +311,13 @@ _attribute_ram_code_ void EPD_BWRY_154_set_sleep(void)
     bwry_wait(400);
     CMD(0x07, 0xA5); /* deep sleep */
     EPD_POWER_OFF();
+}
+
+/* the two bytes the panel controller returned after command 0x40 at the last refresh; the result is the age in seconds
+ * (0xFFFFFFFF = no reading yet) */
+uint32_t EPD_BWRY_154_get_temp(uint8_t *b2)
+{
+    b2[0] = bwry_temp[0];
+    b2[1] = bwry_temp[1];
+    return bwry_temp_stamp == 0xFFFFFFFFu ? 0xFFFFFFFFu : (uint32_t)(get_time() - bwry_temp_stamp);
 }
