@@ -18,8 +18,10 @@ extern uint32_t _end_bss_; /* linker symbol: end of the static RAM; the stack gr
 #define TX_DBM     3 /* ble.c: rf_set_power_level_index(RF_POWER_P3p01dBm); change both together */
 
 /* The flash driver of this SDK has no id functions, so the JEDEC id (0x9F) and the unique id (0x4B, XTX: 0x5A) are read here.
- * Code that talks to the flash chip must run from RAM and with interrupts off, like the driver does. */
-static _attribute_ram_code_ void fl_cmd(uint8_t cmd)
+ * Code that talks to the flash chip must run from RAM and with interrupts off, like the driver does.
+ * noinline is essential: an inlined copy would sit in the flash-resident hwinfo_fill() and hang the chip
+ * while the flash is busy answering the command (this froze the tag in v17). */
+static __attribute__((noinline)) _attribute_ram_code_ void fl_cmd(uint8_t cmd)
 {
     mspi_high();
     sleep_us(1);
@@ -28,7 +30,7 @@ static _attribute_ram_code_ void fl_cmd(uint8_t cmd)
     mspi_wait();
 }
 
-static _attribute_ram_code_ void fl_read_mid(uint8_t *mid)
+static __attribute__((noinline)) _attribute_ram_code_ void fl_read_mid(uint8_t *mid)
 {
     unsigned char r = irq_disable();
     fl_cmd(0x9F);
@@ -39,7 +41,7 @@ static _attribute_ram_code_ void fl_read_mid(uint8_t *mid)
     irq_restore(r);
 }
 
-static _attribute_ram_code_ void fl_read_uid(uint8_t cmd, uint8_t *uid)
+static __attribute__((noinline)) _attribute_ram_code_ void fl_read_uid(uint8_t cmd, uint8_t *uid)
 {
     unsigned char r = irq_disable();
     uint8_t i;
