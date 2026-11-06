@@ -492,7 +492,7 @@ static uint8_t next_slot(int dir)
     return playlist[i == 0 ? pl_count - 1 : i - 1];
 }
 
-/* start-up screen: black text on white, fixed in the firmware (tools/make_splash.py) */
+/* start-up screen, fixed in the firmware (tools/make_splash.py; bit set = black) */
 static void do_show_splash(void)
 {
     expand_1bpp(splash_1bpp, 1, 0);
