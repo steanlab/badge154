@@ -19,6 +19,7 @@
 #include "led_link.h"
 #include "hwinfo.h"
 #include "wdt.h"
+#include "textscr.h"
 
 /* ---------------------------------------------------------------------------------------------
  * constants
@@ -460,6 +461,7 @@ static int slide_load(uint8_t slot)
  * ------------------------------------------------------------------------------------------- */
 RAM static uint8_t  cur_slot = NO_SLOT;
 RAM static uint8_t  show_pending = NO_SLOT;
+RAM static uint8_t  info_pending = 0; /* draw the hardware report on the tag screen */
 RAM static uint32_t last_change = 0;
 RAM static uint8_t  boot_done = 0;
 RAM static uint8_t  last_cmd = 0, last_res = 0;
@@ -527,7 +529,7 @@ static void resp_update(void)
 
     r[0] = last_cmd;
     r[1] = last_res;
-    r[2] = (uint8_t)((up_active ? 1 : 0) | (epd_update_state ? 2 : 0) | (show_pending != NO_SLOT ? 4 : 0));
+    r[2] = (uint8_t)((up_active ? 1 : 0) | (epd_update_state ? 2 : 0) | ((show_pending != NO_SLOT || info_pending) ? 4 : 0));
     r[3] = pl_count;
     r[4] = cur_slot;
     r[5] = (uint8_t)fs;
@@ -558,7 +560,7 @@ static uint32_t next_change_s(void)
     return el >= total ? 0u : total - el;
 }
 
-static void resp_hw(uint8_t page)
+static void hw_slides(hw_slides_t *hp)
 {
     hw_slides_t h;
     h.next_s = next_change_s();
@@ -566,6 +568,13 @@ static void resp_hw(uint8_t page)
     h.free_sectors = (uint8_t)free_sectors();
     h.count = pl_count;
     h.interval_min = cfg.interval_min;
+    *hp = h;
+}
+
+static void resp_hw(uint8_t page)
+{
+    hw_slides_t h;
+    hw_slides(&h);
     hwinfo_fill(page, my_EPD_BLE_Data, &h);
 }
 
@@ -816,6 +825,12 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
         else
             res = R_BADARG;
         break;
+    case 0x2E: /* hardware report on the tag screen */
+        if (up_active)
+            res = R_BUSY;
+        else
+            info_pending = 1;
+        break;
     case 0x2A: /* ABORT upload */
         up_abort();
         ble_set_connection_speed(200);
@@ -859,6 +874,20 @@ void slides_tick(void)
 
     if (epd_update_state)
         return; /* the panel is refreshing */
+
+    if (info_pending)
+    {
+        char ln[TXT_LINES][TXT_COLS + 1];
+        hw_slides_t h;
+        info_pending = 0;
+        hw_slides(&h);
+        hwinfo_text(ln, &h);
+        textscr_draw(slide_img, "TAG HARDWARE", ln, TXT_LINES);
+        cur_slot = NO_SLOT; /* like the splash: the slides continue after the interval */
+        last_change = get_time();
+        EPD_BWRY_154_show(slide_img);
+        return;
+    }
 
     if (show_pending != NO_SLOT)
     {
