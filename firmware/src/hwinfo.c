@@ -111,21 +111,22 @@ void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s)
     flash_read_page(0x18, 4, hdr); /* the image header holds the firmware size */
     fw = (uint32_t)hdr[0] | ((uint32_t)hdr[1] << 8) | ((uint32_t)hdr[2] << 16) | ((uint32_t)hdr[3] << 24);
     kb10 = fw * 10 / 1024;
-    p = cat(ln[1], "Firmware ");
+    p = cat(ln[1], "FW ");
     p = dec(p, kb10 / 10);
     *p++ = '.';
     *p++ = (char)('0' + kb10 % 10);
-    p = cat(p, " KB");
+    p = cat(p, "/80 KB");
     *p = 0;
 
     p = cat(ln[2], "Slides ");
     p = dec(p, s->count);
     *p = 0;
 
-    p = cat(ln[3], "Blocks ");
-    p = dec(p, (uint32_t)(s->sectors - s->free_sectors));
+    p = cat(ln[3], "Memory "); /* slide memory: used / total, 4 KB per block */
+    p = dec(p, (uint32_t)(s->sectors - s->free_sectors) * 4);
     *p++ = '/';
-    p = dec(p, s->sectors);
+    p = dec(p, (uint32_t)s->sectors * 4);
+    p = cat(p, " KB");
     *p = 0;
 
     fl_read_mid(mid);

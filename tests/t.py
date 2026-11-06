@@ -164,13 +164,33 @@ check(nxt==(cur+1)%3,f'tap goes to the next slide ({cur}->{nxt})')
 gi('fake_conn').value=1; check(tap()==0,'tap ignored while a phone is connected'); gi('fake_conn').value=0
 epd.value=1; gi('fake_tap').value=1; L.slides_tick(); epd.value=0; b=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==b,'tap during refresh is dropped, not replayed')
 cmd(0x26,0,0,0,1); check(tap()==0,'flag bit0 = taps disabled'); cmd(0x26,0,0,0,0); check(tap()==1,'taps work again after the flag is cleared')
+# the splash goes away after the phone disconnects
+def boot_splash(nslides):
+    host_reset(); L.slides_init(); L.slides_host_reboot()
+    for s in range(nslides): upload(s,lz4(pack2([s+1]*40000)),1)
+    cmd(0x26,0,0,0,0)  # no automatic change, so only the disconnect can end the splash
+    gu('fake_time').value+=10; L.slides_tick(); L.slides_tick()
+boot_splash(2); b=gi('show_count').value
+L.slides_tick(); L.slides_tick(); check(gi('show_count').value==b,'splash stays while nobody connects')
+gi('fake_conn').value=1; L.slides_tick(); L.slides_tick(); check(gi('show_count').value==b,'splash stays while the phone is connected')
+gi('fake_conn').value=0; L.slides_tick(); check(gi('show_count').value==b+1 and shown[0]>>6 in (1,2),'splash ends when the phone disconnects: a slide is shown')
+gi('fake_conn').value=1; L.slides_tick(); gi('fake_conn').value=0; L.slides_tick(); check(gi('show_count').value==b+1,'a later disconnect changes nothing')
+boot_splash(0); b=gi('show_count').value
+gi('fake_conn').value=1; L.slides_tick(); gi('fake_conn').value=0; L.slides_tick(); check(gi('show_count').value==b,'no slides: the splash stays')
+boot_splash(2); b=gi('show_count').value
+gi('fake_conn').value=1; L.slides_tick(); cmd(0x2E); gi('fake_conn').value=0; L.slides_tick(); L.slides_tick()
+check(gi('show_count').value==b+1,'hardware report screen is not replaced when the phone disconnects')
+boot_splash(2); b=gi('show_count').value
+epd=ctypes.c_uint8.in_dll(L,'epd_update_state')
+gi('fake_conn').value=1; L.slides_tick(); gi('fake_conn').value=0; epd.value=1; L.slides_tick(); epd.value=0; L.slides_tick()
+check(gi('show_count').value==b+1,'disconnect during a panel refresh: the slide follows after it')
 # watchdog test command: only with the magic byte
 b=gi('wdt_test_calls').value; r=cmd(0x2D); check(r[1]==1 and gi('wdt_test_calls').value==b,'watchdog test without the magic byte is refused')
 r=cmd(0x2D,0x5A); check(r[1]==1 and gi('wdt_test_calls').value==b,'watchdog test with a wrong byte is refused')
 r=cmd(0x2D,0xA5); check(r[1]==0 and gi('wdt_test_calls').value==b+1,'watchdog test with the magic byte reaches the watchdog')
 # hardware report on the tag screen (command 0x2E)
 b=gi('show_count').value; r=cmd(0x2E); check(r[1]==0 and gi('show_count').value==b+1,'hardware report: command draws the screen once')
-img=bytes(shown); check(img[0]==0 and img.count(0)>8000,'hardware report: black background')
+img=bytes(shown); check(img[0]==0xFF and img.count(0xFF)>8000,'hardware report: red background')
 
 z=bytes(50); crc=crc16(z); cmd(0x20,6,1,len(z)&255,len(z)>>8,crc&255,crc>>8,1,0); r=cmd(0x2E); check(r[1]==4,'hardware report refused during an upload'); cmd(0x2A)
 check(gi('write_violations').value==0,'flash write violations = %d'%gi('write_violations').value)

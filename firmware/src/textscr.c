@@ -125,9 +125,9 @@ void textscr_draw(uint8_t *img, const char *heading, char (*lines)[TXT_COLS + 1]
     unsigned int i;
     uint8_t k;
     for (i = 0; i < W * W / 4; i++)
-        img[i] = 0; /* black */
-    draw_text(img, X0, HEAD_Y, heading, 3);
-    fill_rect(img, X0, HEAD_Y + 7 * SCALE + 4, W - 2 * X0, 2, 3);
+        img[i] = 0xFF; /* red background */
+    draw_text(img, X0, HEAD_Y, heading, 1);
+    fill_rect(img, X0, HEAD_Y + 7 * SCALE + 4, W - 2 * X0, 2, 1);
     for (k = 0; k < n; k++)
         draw_text(img, X0, LINES_Y + k * PITCH, lines[k], 1);
 }

@@ -464,6 +464,8 @@ static int slide_load(uint8_t slot)
  * ------------------------------------------------------------------------------------------- */
 RAM static uint8_t  cur_slot = NO_SLOT;
 RAM static uint8_t  show_pending = NO_SLOT;
+RAM static uint8_t  splash_up = 0;     /* the splash is on the screen */
+RAM static uint8_t  was_conn = 0, leave_splash = 0;
 RAM static uint8_t  info_pending = 0; /* draw the hardware report on the tag screen */
 RAM static uint32_t last_change = 0;
 RAM static uint8_t  boot_done = 0;
@@ -506,12 +508,14 @@ static void do_show_splash(void)
 {
     expand_1bpp(splash_1bpp, 1, 0);
     cur_slot = NO_SLOT;
+    splash_up = 1;
     last_change = get_time();
     EPD_BWRY_154_show(slide_img);
 }
 
 static int do_show(uint8_t slot)
 {
+    splash_up = 0;
     if (slide_load(slot) != 0)
         return -1;
     cur_slot = slot;
@@ -866,6 +870,12 @@ void slides_tick(void)
     nfc_poll();
     led_link_tick();
     tap = nfc_tap_take(); /* a tap during a panel refresh is dropped */
+    {
+        uint8_t c = ble_get_connected() ? 1 : 0;
+        if (was_conn && !c && splash_up)
+            leave_splash = 1; /* the phone has disconnected while the splash is shown: the slides begin */
+        was_conn = c;
+    }
     if (list_mode == 1)
         resp_list();
     else if (list_mode == 2)
@@ -887,6 +897,7 @@ void slides_tick(void)
         hwinfo_text(ln, &h);
         textscr_draw(slide_img, "TAG HARDWARE", ln, TXT_LINES);
         cur_slot = NO_SLOT; /* like the splash: the slides continue after the interval */
+        splash_up = 0;
         last_change = get_time();
         EPD_BWRY_154_show(slide_img);
         return;
@@ -918,6 +929,16 @@ void slides_tick(void)
         return;
     }
 
+    if (leave_splash && !up_active && !ble_get_connected())
+    {
+        uint8_t s;
+        leave_splash = 0;
+        s = splash_up ? next_slot(0) : NO_SLOT;
+        if (s != NO_SLOT)
+            do_show(s);
+        return;
+    }
+
     if (tap && !(cfg.flags & 1) && !up_active && !ble_get_connected())
     {
         uint8_t s = next_slot(0); /* NFC tap = next slide */
@@ -939,3 +960,15 @@ void slides_tick(void)
             do_show(s);
     }
 }
+
+#ifdef SLIDES_HOST
+/* host tests only: act as after a power-up (the retention RAM is lost) */
+void slides_host_reboot(void)
+{
+    boot_done = 0;
+    splash_up = 0;
+    was_conn = 0;
+    leave_splash = 0;
+    cur_slot = NO_SLOT;
+}
+#endif
