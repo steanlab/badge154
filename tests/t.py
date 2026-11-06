@@ -148,6 +148,17 @@ check(seq==[0,1,2,0,1],f'auto change sequence after the splash {seq}')
 gu('fake_time').value+=30; before=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==before,'no change before interval')
 cmd(0x26,0,0,0,0); gu('fake_time').value+=9999; before=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==before,'interval 0 = off')
 L.slides_init(); info=cmd(0x28); check(info[6]|(info[7]<<8)==0,'config persisted (0)')
+# 9 NFC tap = next slide
+def tap(): 
+    gi('fake_tap').value=1; b=gi('show_count').value; L.slides_tick(); return gi('show_count').value-b
+epd=ctypes.c_uint8.in_dll(L,'epd_update_state')
+cmd(0x26,0,0,0,0); L.slides_init(); gu('fake_time').value+=100; L.slides_tick()
+cur=shown[0]>>6
+check(tap()==1,'tap -> one refresh'); nxt=shown[0]>>6
+check(nxt==(cur+1)%3,f'tap goes to the next slide ({cur}->{nxt})')
+gi('fake_conn').value=1; check(tap()==0,'tap ignored while a phone is connected'); gi('fake_conn').value=0
+epd.value=1; gi('fake_tap').value=1; L.slides_tick(); epd.value=0; b=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==b,'tap during refresh is dropped, not replayed')
+cmd(0x26,0,0,0,1); check(tap()==0,'flag bit0 = taps disabled'); cmd(0x26,0,0,0,0); check(tap()==1,'taps work again after the flag is cleared')
 check(gi('write_violations').value==0,'flash write violations = %d'%gi('write_violations').value)
 print('ALL OK' if ok else 'FAILURES')
 sys.exit(0 if ok else 1)
