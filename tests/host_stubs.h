@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #define RAM
+#define CLOCK_SYS_CLOCK_1MS 16000u
 void flash_read_page(uint32_t addr, uint32_t len, uint8_t *buf);
 void flash_write_page(uint32_t addr, uint32_t len, uint8_t *buf);
 void flash_erase_sector(uint32_t addr);
