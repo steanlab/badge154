@@ -18,6 +18,7 @@
 #include "nfc_probe.h"
 #include "led_link.h"
 #include "hwinfo.h"
+#include "wdt.h"
 
 /* ---------------------------------------------------------------------------------------------
  * constants
@@ -808,6 +809,12 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
     case 0x2C: /* hardware report: page */
         resp_hw(len > 1 ? p[1] : 0);
         list_mode = 3; /* the answer stays in the status buffer */
+        break;
+    case 0x2D: /* watchdog test: hang on purpose, the watchdog must restart the tag within WDT_MS */
+        if (len > 1 && p[1] == 0xA5)
+            wdt_test_request();
+        else
+            res = R_BADARG;
         break;
     case 0x2A: /* ABORT upload */
         up_abort();
