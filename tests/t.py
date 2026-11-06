@@ -164,6 +164,10 @@ check(nxt==(cur+1)%3,f'tap goes to the next slide ({cur}->{nxt})')
 gi('fake_conn').value=1; check(tap()==0,'tap ignored while a phone is connected'); gi('fake_conn').value=0
 epd.value=1; gi('fake_tap').value=1; L.slides_tick(); epd.value=0; b=gi('show_count').value; L.slides_tick(); check(gi('show_count').value==b,'tap during refresh is dropped, not replayed')
 cmd(0x26,0,0,0,1); check(tap()==0,'flag bit0 = taps disabled'); cmd(0x26,0,0,0,0); check(tap()==1,'taps work again after the flag is cleared')
+# watchdog test command: only with the magic byte
+b=gi('wdt_test_calls').value; r=cmd(0x2D); check(r[1]==1 and gi('wdt_test_calls').value==b,'watchdog test without the magic byte is refused')
+r=cmd(0x2D,0x5A); check(r[1]==1 and gi('wdt_test_calls').value==b,'watchdog test with a wrong byte is refused')
+r=cmd(0x2D,0xA5); check(r[1]==0 and gi('wdt_test_calls').value==b+1,'watchdog test with the magic byte reaches the watchdog')
 check(gi('write_violations').value==0,'flash write violations = %d'%gi('write_violations').value)
 print('ALL OK' if ok else 'FAILURES')
 sys.exit(0 if ok else 1)
