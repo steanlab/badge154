@@ -58,6 +58,12 @@
 <progress id="prog" max="100" value="0"></progress>
 <p><button class="act" id="upload">Upload to the tag</button> <button id="cancelBtn">Cancel</button></p>
 
+<h3>TAG HARDWARE</h3>
+<p><button class="act" id="hwRead">Read from the tag</button> <button class="act" id="hwPrivBtn">Show unique ID and MAC</button></p>
+<pre id="hwOut" style="white-space:pre-wrap;font-size:14px">connect, then press the button</pre>
+<pre id="hwPriv" style="white-space:pre-wrap;font-size:14px"></pre>
+<p class="hint">The unique ID of the flash chip and the full MAC address are shown only here, they are never written to the log.</p>
+
 <details><summary>Advanced</summary>
  <p>Write size <select id="chunk"><option value="19">19 bytes (default)</option><option value="10">10 bytes (slow, safest)</option></select>
  <label><input type="checkbox" id="forceraw"> do not compress</label></p>
@@ -76,7 +82,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.5';  // page version; goes with firmware v10
+const BUILD='1.6';  // page version; goes with firmware v17
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -242,7 +248,7 @@ async function run(fn){
 $('connect').onclick=()=>run(async()=>{
   if(!navigator.bluetooth)throw new Error('Web Bluetooth is not available in this browser');
   dev=await navigator.bluetooth.requestDevice($('alldev').checked?{acceptAllDevices:true,optionalServices:[SERV]}:{filters:[{namePrefix:'badge154'},{namePrefix:'ESL_'}],optionalServices:[SERV]});
-  dev.addEventListener('gattserverdisconnected',()=>{setState('disconnected');chr=null;});
+  dev.addEventListener('gattserverdisconnected',()=>{setState('disconnected');chr=null;$('hwPriv').textContent='';});
   setState('connecting...');
   // the tag advertises once per second, so the first attempt often fails: try up to 4 times
   for(let n=1;;n++){
@@ -301,6 +307,50 @@ $('cancelBtn').onclick=()=>{cancel=true;};
 $('copyLog').onclick=()=>navigator.clipboard&&navigator.clipboard.writeText(logEl.textContent);
 $('clearLog').onclick=()=>{logEl.textContent='';};
 
+
+// ---- TAG HARDWARE ----
+const u16=(r,i)=>r[i]|(r[i+1]<<8);
+const u32=(r,i)=>((r[i]|(r[i+1]<<8)|(r[i+2]<<16)|(r[i+3]<<24))>>>0);
+const NONE32=0xFFFFFFFF;
+function fmtDur(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60;
+  return (d?d+' d ':'')+(d||h?h+' h ':'')+(d||h||m?m+' min ':'')+x+' s';}
+const FL_MFG={0xC8:'GigaDevice',0x85:'Puya',0x0B:'XTX',0xEF:'Winbond',0x5E:'Zbit',0x68:'Boya',0x1C:'EON',0xA1:'Fudan',0xC2:'Macronix',0x9D:'ISSI',0x20:'XMC'};
+const FL_PART={'C84013':'GD25Q40','C86013':'GD25LD40','EF4013':'W25Q40','856013':'P25Q40H','0B4013':'XT25F04','684013':'BY25Q40','5E4013':'ZB25VQ40'};
+async function hwPage(p){
+  need();await wr([0x2C,p]);const s=await readStatus(0x2C);
+  if(s.raw[2]!==p||s.res!==0)throw new Error('hardware report: bad answer (page '+p+')');
+  return s.raw;
+}
+function hexb(a){return a.map(v=>hex2(v)).join('');}
+async function hwReadAll(){
+  const a=await hwPage(0),b=await hwPage(1),c=await hwPage(2);
+  const mv=u16(a,3),up=u32(a,5),nx=u32(a,9),tx=a[13]>127?a[13]-256:a[13],mtu=u16(a,14),ci=u16(a,16);
+  const mid=[b[3],b[4],b[5]],midHex=hexb(mid),cap=mid[2],flashKB=cap>=10&&cap<=26?Math.round(Math.pow(2,cap)/1024):0;
+  const craw=u16(b,6),ct10=5790-((craw*8400)>>13);
+  const p0=b[8],p1=b[9],page=u32(b,10),fwsz=u32(b,14);
+  const ramUsed=u32(c,3),ramLeft=u32(c,7),blocks=c[11],freeB=c[12],cnt=c[13],iv=u16(c,14);
+  let t='';
+  t+='BATTERY\n  voltage: '+(mv/1000).toFixed(3)+' V\n\n';
+  t+='CHIP\n  SoC: Telink TLSR8359 family (tag description); the firmware is built with the TLSR8258 SDK; the SoC id cannot be read by software\n';
+  t+='  flash: JEDEC id '+midHex+' = '+(FL_MFG[mid[0]]||'unknown maker 0x'+hex2(mid[0]))+(FL_PART[midHex]?', probably '+FL_PART[midHex]:'')+', '+(flashKB?flashKB+' KB':'size code 0x'+hex2(cap))+'\n';
+  t+='  chip temperature: raw '+craw+'  ~ '+(ct10/10).toFixed(1)+' °C (NOT calibrated: formula 579 - raw*840/8192 from the upstream source)\n';
+  t+='  panel temperature: bytes 0x'+hex2(p0)+' 0x'+hex2(p1)+(page===NONE32?'  (not measured yet)':'  = '+(p0>127?p0-256:p0)+' °C if the first byte is a signed temperature (like similar controllers, NOT verified); measured '+fmtDur(page)+' ago, at the last panel refresh')+'\n\n';
+  t+='MEMORY\n  firmware: '+fwsz+' bytes ('+(fwsz/1024).toFixed(1)+' KB) in the flash, limit 80 KB\n';
+  t+='  slides: '+(blocks-freeB)+' of '+blocks+' blocks used ('+(blocks-freeB)*4+' KB used, '+freeB*4+' KB free), '+cnt+' slide(s)\n';
+  t+='  flash total: '+(flashKB?flashKB+' KB':'?')+'\n';
+  t+='  RAM: static data '+ramUsed+' bytes of 65536, '+ramLeft+' bytes left for the stack\n\n';
+  t+='TIME\n  running since power-on: '+fmtDur(up)+'\n';
+  t+='  next slide change: '+(nx===NONE32?'not planned (interval 0 or fewer than 2 slides)':'in '+fmtDur(nx)+' (does not happen while this page is connected)')+'  [interval '+iv+' min]\n\n';
+  t+='BLE\n  TX power: '+(tx>0?'+':'')+tx+' dBm (set in the firmware)\n  ATT MTU: '+mtu+'\n  connection interval: '+(ci*1.25).toFixed(2)+' ms\n';
+  $('hwOut').textContent=t;
+  log('hardware report read (battery '+(mv/1000).toFixed(2)+' V, flash id '+midHex+', fw '+fwsz+' B)');
+}
+async function hwPriv(){
+  const u=await hwPage(3),m=await hwPage(4);
+  $('hwPriv').textContent='flash unique ID: '+hexb(Array.from(u.slice(3,19)))+'\nBluetooth MAC: '+Array.from(m.slice(3,9)).reverse().map(hex2).join(':');
+}
+$('hwRead').onclick=()=>run(hwReadAll);
+$('hwPrivBtn').onclick=()=>run(hwPriv);
 // ---- NFC probe ----
 const NFC_A=['FFF3 RF_STATUS','FFF7 MAIN_IRQ','FFF8 FIFO_IRQ','FFF9 AUX_IRQ','FFFA MAIN_MASK','FFFB FIFO_MASK','FFFC AUX_MASK','FFFD NFC_CFG','FFE0','FFE1','FFE2','FFE7'];
 const NFC_B=['03B0','03B1','03B2','03B3','03B4','03B5','03B6','03B7','FFF2 FIFO_WORDCNT','FFF4 RF_TXEN','FFF5 RF_BAUD','FFF6 RF_RATS'];
