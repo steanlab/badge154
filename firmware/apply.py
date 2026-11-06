@@ -50,6 +50,14 @@ edit('app.c', r'    uint8_t current_minute = .*?(    if \(time_reached_period\(T
 # --- ble.c: the old text command parser (settings of the thermometer firmware) is not needed ---
 edit('ble.c', r'\tcmd_parser\(p\);\n', '')
 
+# --- no UART log and no OTA: the UART pin (PB1) stays untouched (also while a programmer is attached), and the OTA service of the
+#     upstream firmware (it erases and writes 0x20000.. = the slide area, reboots, rewrites the firmware) answers nothing ---
+edit('main.c', r'\tinit_uart\(\);\n', '')
+edit('main.c', r'\t+printf\([^\n]*\);\n', '', count=2)
+edit('ble.c', r'\t+printf\([^\n]*\);\n', '', count=2)
+edit('ble.c', r'\tif \(ota_started == 0\)\s*\{\s*ota_started = 1;\s*ble_set_connection_speed\(6\);\s*\}\s*return custom_otaWrite\(p\);',
+     '\treturn 0; /* OTA is not supported: the slides live where the upstream OTA would write */', flags=re.S)
+
 # --- time.c: catch up if the main loop was blocked for a while ---
 edit('time.c', r'    if \(clock_time\(\) - last_clock_increase >= one_second_trimmed\)', '    while (clock_time() - last_clock_increase >= one_second_trimmed)')
 
