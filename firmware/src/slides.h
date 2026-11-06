@@ -14,7 +14,7 @@
  *   16 byte header + payload, payload = stored image (raw or LZ4, 2 bpp or 1 bpp).
  */
 
-#define SL_FW_VERSION 3
+#define SL_FW_VERSION 6
 
 void slides_init(void);
 void slides_tick(void);                                    /* call from the main loop */
