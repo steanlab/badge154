@@ -59,7 +59,7 @@
 <p><button class="act" id="upload">Upload to the tag</button> <button id="cancelBtn">Cancel</button></p>
 
 <h3>TAG HARDWARE</h3>
-<p><button class="act" id="hwRead">Read from the tag</button> <button class="act" id="hwPrivBtn">Show unique ID and MAC</button></p>
+<p><button class="act" id="hwRead">Read from the tag</button> <button class="act" id="hwPrivBtn">Show unique ID and MAC</button> <button class="act" id="hwScreen">Show on the tag screen</button></p>
 <pre id="hwOut" style="white-space:pre-wrap;font-size:14px">connect, then press the button</pre>
 <pre id="hwPriv" style="white-space:pre-wrap;font-size:14px"></pre>
 <p class="hint">The unique ID of the flash chip and the full MAC address are shown only here, they are never written to the log.</p>
@@ -83,7 +83,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.8';  // page version; goes with firmware v19
+const BUILD='1.9';  // page version; goes with firmware v20
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -335,7 +335,7 @@ async function hwReadAll(){
   t+='CHIP\n';
   t+='  flash: JEDEC id '+midHex+' = '+(FL_MFG[mid[0]]||'unknown maker 0x'+hex2(mid[0]))+(FL_PART[midHex]?', probably '+FL_PART[midHex]:'')+', '+(flashKB?flashKB+' KB':'size code 0x'+hex2(cap))+'\n';
   t+='  chip temperature (raw): '+craw+'\n';
-  t+='  panel temperature (raw): '+(page===NONE32?'not measured yet':'0x'+hex2(p0)+' 0x'+hex2(p1))+'\n\n';
+  t+='  panel temperature: '+(page===NONE32?'not measured yet':(p0>127?p0-256:p0)+' °C (raw 0x'+hex2(p0)+' 0x'+hex2(p1)+'), measured '+fmtDur(page)+' ago')+'\n\n';
   t+='MEMORY\n  firmware: '+fwsz+' bytes ('+(fwsz/1024).toFixed(1)+' KB) in the flash, limit 80 KB\n';
   t+='  slides: '+(blocks-freeB)+' of '+blocks+' blocks used ('+(blocks-freeB)*4+' KB used, '+freeB*4+' KB free), '+cnt+' slide(s)\n';
   t+='  flash total: '+(flashKB?flashKB+' KB':'?')+'\n';
@@ -352,6 +352,7 @@ async function hwPriv(){
 }
 $('hwRead').onclick=()=>run(hwReadAll);
 $('hwPrivBtn').onclick=()=>run(hwPriv);
+$('hwScreen').onclick=()=>run(async()=>{need();await cmd([0x2E]);log('hardware report is drawn on the tag screen (refresh ~25 s)');});
 $('wdTest').onclick=()=>run(async()=>{need();if(!confirm('The tag will hang and restart in about 8 s, the splash screen will be drawn. Continue?'))return;await wr([0x2D,0xA5]);log('watchdog test sent: the tag now hangs, it must restart by itself in about 8 s');});
 // ---- NFC probe ----
 const NFC_A=['FFF3 RF_STATUS','FFF7 MAIN_IRQ','FFF8 FIFO_IRQ','FFF9 AUX_IRQ','FFFA MAIN_MASK','FFFB FIFO_MASK','FFFC AUX_MASK','FFFD NFC_CFG','FFE0','FFE1','FFE2','FFE7'];
