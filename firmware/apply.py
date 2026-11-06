@@ -23,7 +23,7 @@ def edit(name, pattern, repl, regex=True, count=1, flags=0):
     print("ok", name, pattern[:50].replace("\n", " "))
 
 for f in ('epd_bwry_154.c', 'epd_bwry_154.h', 'slides.c', 'slides.h', 'splash.h', 'nfc_probe.c', 'nfc_probe.h',
-          'epd.c', 'epd.h', 'epd_ble_service.c', 'project.mk'):  # the last four replace the upstream files
+          'epd.c', 'epd.h', 'epd_ble_service.c', 'project.mk', 'nfc.c'):  # the last five replace the upstream files
     shutil.copy(here / f, root / f)
 
 # --- pinout of the Hanshow Nebular Pro 154 (ATC_BLE_OEPL preset "200 HS BWRY JD") ---
