@@ -1,5 +1,6 @@
 #include "host_stubs.h"
 #include <stdlib.h>
+#include "hwinfo.h"
 uint8_t flash_mem[512*1024];
 
 uint16_t battery_mv = 3000;
@@ -27,3 +28,4 @@ void nfc_probe_run(uint8_t s, uint8_t a){(void)s;(void)a;}
 void nfc_probe_fill(uint8_t *r){ r[0]=0x2B; r[1]=0; r[19]=0x5A; }
 void led_link_tick(void){}
 uint8_t led_link_active(void){ return 0; }
+void hwinfo_fill(uint8_t page, uint8_t *r, const hw_slides_t *s){ memset(r,0,20); r[0]=0x2C; r[2]=page; r[3]=s->sectors; r[4]=s->free_sectors; r[5]=s->count; r[6]=(uint8_t)s->interval_min; memcpy(r+7,&s->next_s,4); r[19]=0x5A; }
