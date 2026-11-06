@@ -49,6 +49,9 @@ jobs:
       - name: RAM check (stack must not be overrun)
         run: bash firmware/check_ram.sh upstream/Firmware/out/ATC_Paper.elf
 
+      - name: Firmware size (must end below the slide area)
+        run: bash firmware/check_size.sh upstream/Firmware/ATC_Paper.bin
+
       - name: Collect
         run: |
           mkdir out
