@@ -14,8 +14,9 @@
  *   16 byte header + payload, payload = stored image (raw or LZ4, 2 bpp or 1 bpp).
  */
 
-#define SL_FW_VERSION 23
+#define SL_FW_VERSION 24
 
 void slides_init(void);
+int  slides_low_battery(void);                             /* 1 = battery low: writes and refreshes are stopped */
 void slides_tick(void);                                    /* call from the main loop */
 int  slides_ble_cmd(const uint8_t *payload, unsigned int len); /* commands 0x20 .. 0x2F */
