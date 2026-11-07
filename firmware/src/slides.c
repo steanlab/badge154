@@ -775,7 +775,7 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
         fl_erase(SL_BASE + (uint32_t)up_sec * SL_SECSZ);
         up_erased = 0;
         up_active = 1;
-        ble_set_connection_speed(16); /* 20 ms: fast upload */
+        ble_set_connection_speed(6); /* 7.5 .. 10 ms during an upload (the phone decides); back to 250 ms afterwards */
         break;
     }
     case 0x21: /* DATA: bytes */
