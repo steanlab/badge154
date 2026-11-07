@@ -1,5 +1,9 @@
 # badge154
 
+![badge154: Bluetooth / NFC slideshow for Hanshow Nebular 154 e-paper tags](docs/img/social-preview.png)
+
+[![Release](https://img.shields.io/github/v/release/steanlab/badge154)](https://github.com/steanlab/badge154/releases) [![Licence: MIT (page and docs)](https://img.shields.io/badge/licence-MIT%20(page%20and%20docs)-blue)](LICENSE)
+
 A standalone e-paper slideshow for the **Hanshow Nebular 154** electronic shelf labels (**Pro 154Q-N, Plus 154Q-N and 154R-N**; one firmware, tested on all three): 1.54", 200 x 200 px,
 black / white / yellow / red, Telink TLSR8359. The slides live in the flash of the tag and are uploaded from a phone or a
 computer over Bluetooth with a web page. The picture stays on the e-paper without power.
@@ -8,6 +12,20 @@ computer over Bluetooth with a web page. The picture stays on the e-paper withou
 
 > Flashing **replaces the original firmware** of the tag. Back up the stock flash first (see [`firmware/FLASHING.md`](firmware/FLASHING.md)).
 > Use at your own risk, no warranty. Unofficial: not affiliated with Hanshow, Telink or OpenEPaperLink.
+
+## Compatible tags
+
+One firmware for the whole Nebular 154 family. Tested on all three variants:
+
+| Label on the housing | Board marking | Power | FCC ID printed | Status |
+|---|---|---|---|---|
+| `Model: Nebular Pro-154Q-N` | `HSEL4Q_01_54M_31` | soft (pouch) cell, 650 mAh, soldered | 2AYMH-NP-154 | tested |
+| `Model: Nebular Plus-154Q-N` | `HSEL4Q_01_54M_31` | coin cell, "Hanshow Lithium Battery" | 2AYMH-NP-154Q | tested |
+| `Model: Nebular-154R-N` | `HSEL4_01_54M_30` | soft (pouch) cell, 650 mAh, soldered | not printed | tested |
+
+All three: Telink TLSR8359 (marked Hanshow HS9118), 512 KB flash, 1.54" 200 x 200 black / white / yellow / red panel, NFC chip FM11NT083V, RGB LED. Photos of the boards and the programming pads: [`docs/HARDWARE.md`](docs/HARDWARE.md#hardware-variants). Other Hanshow tags are **not** supported.
+
+Have a different tag, or a result from one of these? Open an Issue and say what worked.
 
 ## What it does
 
