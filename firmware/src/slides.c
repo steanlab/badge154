@@ -11,6 +11,7 @@
 #include "epd_bwry_154.h"
 #include "time.h"
 #include "ble.h"
+#include "battery.h"
 #endif
 
 #include "slides.h"
@@ -471,6 +472,13 @@ RAM static uint8_t  cur_slot = NO_SLOT;
 RAM static uint8_t  show_pending = NO_SLOT;
 RAM static uint8_t  splash_up = 0;     /* the splash is on the screen */
 RAM static uint8_t  was_conn = 0, leave_splash = 0;
+/* Low battery: below BAT_LOW_MV the flash writes and the panel refreshes are stopped (a brown-out in the middle of a write or a refresh
+ * would damage a slide or leave the panel half drawn).  The last picture stays on the e-paper without power.
+ * The state is confirmed by two readings 30 s apart (battery_mv is refreshed every 30 s by app.c), and leaves only above BAT_OK_MV. */
+#define BAT_LOW_MV   2400u
+#define BAT_OK_MV    2500u
+RAM static uint8_t  batt_low = 0, low_shown = 0, low_cnt = 0;
+RAM static uint32_t batt_t = 0;
 RAM static uint8_t  info_pending = 0; /* draw the hardware report on the tag screen */
 RAM static uint32_t last_change = 0;
 RAM static uint8_t  boot_done = 0;
@@ -518,6 +526,53 @@ static void do_show_splash(void)
     EPD_BWRY_154_show(slide_img);
 }
 
+static void do_show_low(void)
+{
+    char ln[TXT_LINES][TXT_COLS + 1];
+    hwinfo_low_text(ln, battery_mv);
+    textscr_draw(slide_img, "LOW BATTERY", ln, 4);
+    cur_slot = NO_SLOT;
+    splash_up = 0;
+    low_shown = 1;
+    last_change = get_time();
+    EPD_BWRY_154_show(slide_img);
+}
+
+int slides_low_battery(void)
+{
+    return batt_low;
+}
+
+/* called from the tick; direct = measure now (start-up, nobody transmits) instead of waiting for the periodic reading */
+static void batt_update(uint8_t direct)
+{
+    uint16_t mv;
+    if (direct)
+    {
+        battery_mv = get_battery_mv();
+        mv = battery_mv;
+        low_cnt = (mv && mv < BAT_LOW_MV) ? 2 : 0; /* a single reading is enough at the start */
+        batt_low = low_cnt >= 2;
+        batt_t = get_time();
+        return;
+    }
+    if ((uint32_t)(get_time() - batt_t) < 30)
+        return;
+    batt_t = get_time();
+    mv = battery_mv;
+    if (mv && mv < BAT_LOW_MV)
+    {
+        if (low_cnt < 2)
+            low_cnt++;
+    }
+    else if (mv >= BAT_OK_MV)
+        low_cnt = 0;
+    if (low_cnt >= 2)
+        batt_low = 1;
+    else if (low_cnt == 0)
+        batt_low = 0;
+}
+
 static int do_show(uint8_t slot)
 {
     splash_up = 0;
@@ -541,7 +596,7 @@ static void resp_update(void)
 
     r[0] = last_cmd;
     r[1] = last_res;
-    r[2] = (uint8_t)((up_active ? 1 : 0) | (epd_update_state ? 2 : 0) | ((show_pending != NO_SLOT || info_pending) ? 4 : 0));
+    r[2] = (uint8_t)((up_active ? 1 : 0) | (epd_update_state ? 2 : 0) | ((show_pending != NO_SLOT || info_pending) ? 4 : 0) | (batt_low ? 8 : 0));
     r[3] = pl_count;
     r[4] = cur_slot;
     r[5] = (uint8_t)fs;
@@ -616,6 +671,14 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
     unsigned int i;
 
     list_mode = 0;
+    if (batt_low && (cmd == 0x20 || cmd == 0x21 || cmd == 0x22 || (cmd >= 0x23 && cmd <= 0x27) || cmd == 0x2E || cmd == 0x2F))
+    {
+        if (up_active)
+            up_abort(); /* the battery fell in the middle of an upload: stop writing the flash */
+        last_cmd = cmd;
+        last_res = R_LOWBAT;
+        return 0;
+    }
     switch (cmd)
     {
     case 0x20: /* BEGIN: slot, flags, len(2), crc(2), pal0, pal1 */
@@ -885,6 +948,8 @@ void slides_tick(void)
 
     nfc_poll();
     led_link_tick();
+    if (boot_done)
+        batt_update(0);
     tap = nfc_tap_take(); /* a tap during a panel refresh is dropped */
     {
         uint8_t c = ble_get_connected() ? 1 : 0;
@@ -903,6 +968,23 @@ void slides_tick(void)
 
     if (epd_update_state)
         return; /* the panel is refreshing */
+
+    if (batt_low)
+    {
+        show_pending = NO_SLOT;
+        info_pending = 0;
+        if (!low_shown && boot_done)
+            do_show_low(); /* once: the warning stays on the panel, nothing else is refreshed */
+        return;
+    }
+    if (low_shown)
+    {
+        uint8_t s = next_slot(0); /* the battery is fine again: back to the slides */
+        low_shown = 0;
+        if (s != NO_SLOT)
+            do_show(s);
+        return;
+    }
 
     if (info_pending)
     {
@@ -936,11 +1018,15 @@ void slides_tick(void)
         if (get_time() >= 3)
         {
             boot_done = 1;
+            batt_update(1);
             set_led_color(3); /* one blue blink: the start-up splash begins */
             WaitMs(200);
             set_led_color(0);
             WaitMs(200);
-            do_show_splash(); /* every start (new battery, reset) begins with the splash; the slides follow after the interval */
+            if (batt_low)
+                do_show_low(); /* a nearly empty battery: the warning instead of the splash */
+            else
+                do_show_splash(); /* every start (new battery, reset) begins with the splash; the slides follow after the interval */
         }
         return;
     }
