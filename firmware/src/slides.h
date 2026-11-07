@@ -14,7 +14,8 @@
  *   16 byte header + payload, payload = stored image (raw or LZ4, 2 bpp or 1 bpp).
  */
 
-#define SL_FW_VERSION 24
+#define SL_FW_VERSION 25
+#define SL_WRITE_MAX  17 /* data bytes the tag takes in one command 0x30 (a write is at most 20 bytes: command, offset(2), data) */
 
 void slides_init(void);
 int  slides_low_battery(void);                             /* 1 = battery low: writes and refreshes are stopped */
