@@ -7,6 +7,7 @@
 void flash_read_page(uint32_t addr, uint32_t len, uint8_t *buf);
 void flash_write_page(uint32_t addr, uint32_t len, uint8_t *buf);
 void flash_erase_sector(uint32_t addr);
+uint16_t get_battery_mv(void);
 uint32_t get_time(void);
 uint32_t clock_time(void);
 int ble_get_connected(void);
