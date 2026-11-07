@@ -8,4 +8,8 @@ python3 -I t.py
 node codec_test.js
 python3 -I t2.py
 python3 -I t3.py
+# fuzz: hostile commands, hostile slide data, damaged flash; AddressSanitizer + UndefinedBehaviorSanitizer
+gcc -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -DSLIDES_HOST -I. -I../firmware/src \
+    -o fuzz ../firmware/src/slides.c ../firmware/src/textscr.c host_impl.c fuzz.c -Wall
+for seed in 1 2 3 4 5 6; do FUZZ_SEED=$seed FUZZ_ITERS=${FUZZ_ITERS:-1500} ./fuzz; done
 echo "all tests passed"
