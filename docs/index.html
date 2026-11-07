@@ -91,7 +91,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.14';  // page version; goes with firmware v25
+const BUILD='1.15';  // page version; goes with firmware v26
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -370,10 +370,12 @@ async function uploadOne(slot,enc){
     if(pos<len){log('  fast upload is not stable here, continuing in safe mode from byte '+pos);how='fast, then safe';}
   }
   if(pos<len)pos=await sendSafe(data,pos,+$('chunk').value,prog);
+  let link='';
+  try{const a=await hwPage(0);link=', link '+(u16(a,16)*1.25).toFixed(1)+' ms, MTU '+u16(a,14);}catch(e){}
   const s=await cmd([0x22],false);
   if(s.res!==0){try{await wr([0x2A]);}catch(e){}throw new Error((ERR[s.res]||('error '+s.res))+' at the end of the upload');}
   const sec=(Date.now()-t0)/1000;
-  log('slot '+slot+': '+len+' bytes in '+sec.toFixed(1)+' s ('+(len/1024/Math.max(sec,0.001)).toFixed(1)+' KB/s, '+how+(stats.resync?', '+stats.resync+' resend(s)':'')+')');
+  log('slot '+slot+': '+len+' bytes in '+sec.toFixed(1)+' s ('+(len/1024/Math.max(sec,0.001)).toFixed(1)+' KB/s, '+how+(stats.resync?', '+stats.resync+' resend(s)':'')+link+')');
 }
 $('upload').onclick=()=>run(async()=>{
   need();if(!files.length)throw new Error('select a picture first');
