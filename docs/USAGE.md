@@ -11,7 +11,7 @@ Flashing the firmware is described in [`../firmware/FLASHING.md`](../firmware/FL
 
 ## First use
 
-1. Start the tag: put the coin cell in (Plus) or reset it (Pro and 154R-N have a soldered cell, see [Restarting the tag](#restarting-the-tag)). The LED blinks blue once and after a moment the **start-up screen** (BADGE154) is drawn. The panel needs about 25 s to redraw; the picture then stays without power.
+1. Start the tag: put the coin cell in (Plus) or restart it (Pro and 154R-N have a soldered cell, see [Restarting the tag](#restarting-the-tag)). The LED blinks blue once and after a moment the **start-up screen** (BADGE154) is drawn. The panel needs about 25 s to redraw; the picture then stays without power.
 2. Open the control page, press **Connect** and choose `badge154-...` in the list (if it is missing, tick "show all Bluetooth devices", move closer and wait a few seconds: the tag announces itself once per second).
 3. The page shows the firmware version, the battery voltage, the name and the slides on the tag.
 4. Choose one or several pictures. Check the preview. **Upload to the tag**. A picture of 5 to 9 KB takes 10 to 15 s.
@@ -82,11 +82,13 @@ The tag works from its battery for as long as the interval and the number of red
 
 ## Restarting the tag
 
-A restart does not erase slides or settings.
+A restart does not erase slides or settings. Three ways, from the easiest:
 
+- **From the page** (any variant, the tag must be connected): **Advanced → Watchdog test**. The tag hangs on purpose, the connection drops and the tag restarts by itself after about 8 s. The restart counter of the hardware report goes up by one each time, so it no longer shows only real hangs.
 - **Plus**: take the coin cell out for 5 to 10 s and put it back.
 - **Pro and 154R-N** (soldered cell): touch the **NRST** pad to the **GND** pad for a moment, for example with a wire or the end of a paper clip. The two pads are at the bottom edge of the board, next to each other. The housing has to be opened for this; one possible idea, not tested here, is to drill two small holes in the housing over these pads so that a bent paper clip can be pushed in.
 - The LED blinks blue once and the start-up screen follows.
+- There is no separate restart button in the firmware. A dedicated restart command could be added later.
 
 ## Troubleshooting
 
