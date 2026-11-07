@@ -137,6 +137,7 @@ static void upload_payload(uint8_t slot, uint8_t flags, const uint8_t *pl, unsig
     uint8_t cmd[64];
     unsigned int i;
     uint16_t c = crc16(pl, len);
+    int by_offset = rn(3) == 0;
     cmd[0] = 0x20; cmd[1] = slot; cmd[2] = flags;
     cmd[3] = (uint8_t)len; cmd[4] = (uint8_t)(len >> 8);
     cmd[5] = (uint8_t)c; cmd[6] = (uint8_t)(c >> 8);
@@ -145,9 +146,21 @@ static void upload_payload(uint8_t slot, uint8_t flags, const uint8_t *pl, unsig
     for (i = 0; i < len; i += chunk)
     {
         unsigned int n = len - i < chunk ? len - i : chunk;
-        cmd[0] = 0x21;
-        memcpy(cmd + 1, pl + i, n);
-        send(cmd, n + 1);
+        if (by_offset)
+        {
+            cmd[0] = 0x30; /* data at an offset, sometimes repeated */
+            cmd[1] = (uint8_t)i; cmd[2] = (uint8_t)(i >> 8);
+            memcpy(cmd + 3, pl + i, n);
+            send(cmd, n + 3);
+            if (rn(8) == 0)
+                send(cmd, n + 3);
+        }
+        else
+        {
+            cmd[0] = 0x21;
+            memcpy(cmd + 1, pl + i, n);
+            send(cmd, n + 1);
+        }
         if (rn(200) == 0)
             tick_time(rn(40)); /* time passes during the upload */
     }
