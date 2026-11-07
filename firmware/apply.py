@@ -23,7 +23,7 @@ def edit(name, pattern, repl, regex=True, count=1, flags=0):
     print("ok", name, pattern[:50].replace("\n", " "))
 
 for f in ('epd_bwry_154.c', 'epd_bwry_154.h', 'slides.c', 'slides.h', 'splash.h', 'nfc_probe.c', 'nfc_probe.h',
-          'epd.c', 'epd.h', 'epd_ble_service.c', 'project.mk', 'nfc.c', 'led_link.c', 'led_link.h', 'hwinfo.c', 'hwinfo.h', 'wdt.c', 'wdt.h', 'textscr.c', 'textscr.h'):  # epd.c .. nfc.c replace the upstream files
+          'epd.c', 'epd.h', 'epd_ble_service.c', 'project.mk', 'nfc.c', 'led_link.c', 'led_link.h', 'hwinfo.c', 'hwinfo.h', 'wdt.c', 'wdt.h', 'textscr.c', 'textscr.h', 'txpower.c', 'txpower.h'):  # epd.c .. nfc.c replace the upstream files
     shutil.copy(here / f, root / f)
 
 # --- pinout of the Hanshow Nebular Pro 154 (ATC_BLE_OEPL preset "200 HS BWRY JD") ---
@@ -69,6 +69,11 @@ edit('app.c', r'#include "slides.h"', '#include "slides.h"\n#include "led_link.h
 edit('app.c', r'#include "led_link.h"', '#include "led_link.h"\n#include "wdt.h"')
 edit('app.c', r'(void user_init_normal\(void\)\n\{[^\n]*\n)', r'\1    wdt_boot();\n    wdt_init();\n')
 edit('app.c', r'(    blc_ll_recoverDeepRetention\(\);\n)', r'\1    wdt_init();\n')
+# --- TX power: the level comes from the settings (txpower.c), also after every sleep ---
+edit('app.c', r'#include "wdt.h"', '#include "wdt.h"\n#include "txpower.h"')
+edit('app.c', r'rf_set_power_level_index\(RF_POWER_P3p01dBm\);', 'txpower_apply();')
+edit('ble.c', r'#include "ble.h"', '#include "ble.h"\n#include "txpower.h"')
+edit('ble.c', r'rf_set_power_level_index\(RF_POWER_P3p01dBm\);', 'txpower_apply();')
 edit('app.c', r'(_attribute_ram_code_ void main_loop\(void\)\n\{\n)', r'\1    wdt_feed();\n')
 
 # --- time.c: catch up if the main loop was blocked for a while ---
