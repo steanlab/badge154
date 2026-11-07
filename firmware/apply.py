@@ -61,7 +61,7 @@ edit('ble.c', r'\tif \(ota_started == 0\)\s*\{\s*ota_started = 1;\s*ble_set_conn
 # --- LED: the green heartbeat flash every 30 s, only while nobody is connected (a connection has its own light show, led_link.c);
 #     the CPU stays awake during the show (software PWM) ---
 edit('app.c', r'if \(time_reached_period\(Timer_CH_0, 10\)\)\s*\{\s*if \(ble_get_connected\(\)\)\s*set_led_color\(3\);\s*else\s*set_led_color\(2\);\s*WaitMs\(1\);\s*set_led_color\(0\);\s*\}',
-     'if (time_reached_period(Timer_CH_0, 30))\n    {\n        if (!ble_get_connected())\n        {\n            set_led_color(2);\n            WaitMs(1);\n            set_led_color(0);\n        }\n    }', flags=re.S)
+     'if (time_reached_period(Timer_CH_0, 30))\n    {\n        if (!ble_get_connected())\n        {\n            set_led_color(slides_low_battery() ? 1 : 2); /* red = low battery */\n            WaitMs(1);\n            set_led_color(0);\n        }\n    }', flags=re.S)
 edit('app.c', r'(    else\n    \{\n        blt_pm_proc\(\);\n)(    \})', r'\1        if (led_link_active())\n            bls_pm_setSuspendMask(SUSPEND_DISABLE);\n\2')
 edit('app.c', r'#include "slides.h"', '#include "slides.h"\n#include "led_link.h"')
 
