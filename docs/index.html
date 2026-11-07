@@ -68,6 +68,9 @@
  <p>Write size <select id="chunk"><option value="19">19 bytes (default)</option><option value="10">10 bytes (slow, safest)</option></select>
  <label><input type="checkbox" id="forceraw"> do not compress</label></p>
  <p><button class="act" id="info">Read status</button></p>
+ <p>TX power <select id="txSel"></select> <button class="act" id="txApply">Apply</button><br>
+  <span id="txInfo">Current on the tag: ? (press Apply or read the hardware report)</span><br>
+  <span class="hint">After lowering, the link may weaken: keep the tag close.</span></p>
  <p><button class="act" id="wdTest">Watchdog test</button> <span class="hint">the tag hangs on purpose and must restart by itself in about 8 s (the connection drops, the splash screen is drawn again)</span></p>
 </details>
 <details><summary>NFC probe (diagnostics)</summary>
@@ -83,7 +86,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.9';  // page version; goes with firmware v20
+const BUILD='1.10';  // page version; goes with firmware v23
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -325,6 +328,7 @@ async function hwPage(p){
 function hexb(a){return a.map(v=>hex2(v)).join('');}
 async function hwReadAll(){
   const a=await hwPage(0),b=await hwPage(1),c=await hwPage(2);
+  txShow(a[13]>127?a[13]-256:a[13]);
   const mv=u16(a,3),up=u32(a,5),nx=u32(a,9),tx=a[13]>127?a[13]-256:a[13],mtu=u16(a,14),ci=u16(a,16),rs=a[18];
   const mid=[b[3],b[4],b[5]],midHex=hexb(mid),cap=mid[2],flashKB=cap>=10&&cap<=26?Math.round(Math.pow(2,cap)/1024):0;
   const craw=u16(b,6);
@@ -342,7 +346,7 @@ async function hwReadAll(){
   t+='  RAM: static data '+ramUsed+' bytes of 65536, '+ramLeft+' bytes left for the stack\n\n';
   t+='TIME\n  running since the last start: '+fmtDur(up)+'\n  restarts since the battery was inserted: '+rs+(rs>=255?'+':'')+' (watchdog, reset pin or wire flashing)\n';
   t+='  next slide change: '+(nx===NONE32?'not planned (interval 0 or fewer than 2 slides)':'in '+fmtDur(nx)+' (does not happen while this page is connected)')+'  [interval '+iv+' min]\n\n';
-  t+='BLE\n  TX power: '+(tx>0?'+':'')+tx+' dBm (set in the firmware)\n  ATT MTU: '+mtu+'\n  connection interval: '+(ci*1.25).toFixed(2)+' ms\n';
+  t+='BLE\n  TX power: '+(tx>0?'+':'')+tx+' dBm (set in Advanced)\n  ATT MTU: '+mtu+'\n  connection interval: '+(ci*1.25).toFixed(2)+' ms\n';
   $('hwOut').textContent=t;
   log('hardware report read (battery '+(mv/1000).toFixed(2)+' V, flash id '+midHex+', fw '+fwsz+' B)');
 }
@@ -352,6 +356,24 @@ async function hwPriv(){
 }
 $('hwRead').onclick=()=>run(hwReadAll);
 $('hwPrivBtn').onclick=()=>run(hwPriv);
+// ---- TX power ----
+const TX=[10,7,3,0,-3,-6,-10,-16,-19];  // dBm, same order as the table in firmware/src/txpower.c
+const txName=v=>(v>0?'+':'')+v+' dBm';
+TX.forEach((v,i)=>{const o=document.createElement('option');o.value=i;
+  o.textContent=txName(v)+(i===0?' (max, more battery load)':'')+(v===3?' (default)':'')+(v<-10?' (only a few metres)':'');
+  if(v===3)o.selected=true;$('txSel').append(o);});
+function txShow(dbm){$('txInfo').textContent='Current on the tag: '+txName(dbm);const i=TX.indexOf(dbm);if(i>=0)$('txSel').value=i;}
+$('txApply').onclick=()=>run(async()=>{
+  need();const i=+$('txSel').value;
+  try{
+    await cmd([0x2F,i]);log('TX power command sent: '+txName(TX[i]));
+    await new Promise(r=>setTimeout(r,500));
+    const a=await hwPage(0);const d=a[13]>127?a[13]-256:a[13];txShow(d);log('TX power on the tag: '+txName(d));
+  }catch(e){
+    if(!dev||!dev.gatt.connected){$('txInfo').textContent='Connection lost \u2014 most likely the new level is too low. Move the tag close and reconnect, then pick a higher level.';log('connection lost after the TX power change');}
+    else throw e;
+  }
+});
 $('hwScreen').onclick=()=>run(async()=>{need();await cmd([0x2E]);log('hardware report is drawn on the tag screen (refresh ~25 s)');});
 $('wdTest').onclick=()=>run(async()=>{need();if(!confirm('The tag will hang and restart in about 8 s, the splash screen will be drawn. Continue?'))return;await wr([0x2D,0xA5]);log('watchdog test sent: the tag now hangs, it must restart by itself in about 8 s');});
 // ---- NFC probe ----
