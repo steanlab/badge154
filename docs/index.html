@@ -69,7 +69,7 @@
 <p class="hint">The unique ID of the flash chip and the full MAC address are shown only here, they are never written to the log.</p>
 
 <details><summary>Advanced</summary>
- <p>Upload <select id="upmode"><option value="auto">fast (writes without response, falls back to safe by itself)</option><option value="safe">safe (every write confirmed)</option></select><br>
+ <p>Upload <select id="upmode"><option value="safe">safe (every write confirmed) - default</option><option value="2">experimental fast: 2 writes without response, then a check</option><option value="4">experimental fast: 4 writes, then a check</option><option value="8">experimental fast: 8 writes, then a check</option></select><br>
  Write size in safe mode <select id="chunk"><option value="19">19 bytes (default)</option><option value="10">10 bytes (slow, safest)</option></select>
  <label><input type="checkbox" id="forceraw"> do not compress</label></p>
  <p><button class="act" id="info">Read status</button></p>
@@ -91,7 +91,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.13';  // page version; goes with firmware v25
+const BUILD='1.14';  // page version; goes with firmware v25
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -215,7 +215,9 @@ function parseStatus(r){
 }
 async function readStatus(wantCmd){
   for(let t=0;t<40;t++){
-    const v=await chr.readValue();const r=new Uint8Array(v.buffer,v.byteOffset,v.byteLength);
+    let v;
+    for(let q=0;;q++){try{v=await chr.readValue();break;}catch(e){if(q>=30||!/already in progress/i.test(e.message))throw e;await sleep(100);}}
+    const r=new Uint8Array(v.buffer,v.byteOffset,v.byteLength);
     if(r.length>=20&&r[19]===0x5A&&(wantCmd===undefined||r[0]===wantCmd)){lastStatus=parseStatus(r);return lastStatus;}
     await sleep(40);
   }
@@ -223,7 +225,10 @@ async function readStatus(wantCmd){
 }
 async function wr(bytes){
   const b=Uint8Array.from(bytes);
-  if(chr.writeValueWithResponse)await chr.writeValueWithResponse(b);else await chr.writeValue(b);
+  for(let t=0;;t++){
+    try{if(chr.writeValueWithResponse)await chr.writeValueWithResponse(b);else await chr.writeValue(b);return;}
+    catch(e){if(t>=30||!/already in progress/i.test(e.message))throw e;await sleep(100);}
+  }
 }
 async function cmd(bytes,expectOk){
   await wr(bytes);const s=await readStatus(bytes[0]);
@@ -300,7 +305,8 @@ for(const [id,fn] of [
      await cmd([0x26,m&255,m>>8,o,$('tapOn').checked?0:1]);log('saved: change every '+m+' min, '+(o?'random':'in order')+', NFC tap '+($('tapOn').checked?'on':'off'));await refreshAll();}],
 ]) $(id).onclick=()=>run(fn);
 
-const tmo=(pr,ms,what)=>Promise.race([pr,new Promise((_,rej)=>setTimeout(()=>rej(new Error('no reaction in '+ms+' ms: '+what)),ms))]);
+let pendingOp=null;
+const tmo=(pr,ms,what)=>Promise.race([(pendingOp=pr),new Promise((_,rej)=>setTimeout(()=>rej(new Error('no reaction in '+ms+' ms: '+what)),ms))]);
 async function wwr(b){ // write without response; a full queue of the browser is retried
   for(let t=0;;t++){
     try{await tmo(chr.writeValueWithoutResponse(b),1500,'write without response');return;}
@@ -310,7 +316,7 @@ async function wwr(b){ // write without response; a full queue of the browser is
 // fast: command 0x30 = offset + data, written in windows without response. After each window the position is read
 // from the status: what the tag has not stored is sent again from that position (a repeat is harmless).
 // ctx.pos always holds the position confirmed by the tag, so that the safe mode can continue from it.
-async function sendFast(data,max,prog,ctx){
+async function sendFast(data,max,prog,ctx,cap){
   const len=data.length;let win=1,bad=0,first=true;
   while(ctx.pos<len){
     if(cancel){await wr([0x2A]);throw new Error('cancelled');}
@@ -328,7 +334,7 @@ async function sendFast(data,max,prog,ctx){
       await sleep(10);
     }
     if(first){log('  fast: the first test packet, the tag stored '+s.pos+' of '+p+' bytes'+(s.pos>=p?' - works':' - NOT stored'));if(s.pos<p)return;first=false;}
-    if(s.pos>=p){ctx.pos=p;bad=0;win=Math.min(win<4?4:win+4,32);}
+    if(s.pos>=p){ctx.pos=p;bad=0;win=Math.min(win+1,cap);}
     else{if(s.pos>ctx.pos)bad=0;else bad++;ctx.pos=s.pos;win=1;stats.resync++;if(bad>=3)return;}
     prog(ctx.pos);
   }
@@ -348,14 +354,16 @@ async function uploadOne(slot,enc){
   const st=await cmd([0x20,slot,enc.flags,len&255,len>>8,enc.crc&255,enc.crc>>8,enc.pal0,enc.pal1]);
   const prog=p=>{$('prog').value=Math.round(100*p/len);};
   const max=Math.min(st.wmax||0,17);
-  const fast=$('upmode').value==='auto'&&max>=3&&!!chr.writeValueWithoutResponse&&!(chr.properties&&!chr.properties.writeWithoutResponse);
+  const cap=+$('upmode').value||0;
+  const fast=cap>0&&max>=3&&!!chr.writeValueWithoutResponse&&!(chr.properties&&!chr.properties.writeWithoutResponse);
   let pos=0,t0=Date.now(),how='safe';stats={resync:0};
   if(fast){
     how='fast';const ctx={pos:0};
-    try{await sendFast(data,max,prog,ctx);}
+    try{await sendFast(data,max,prog,ctx,cap);}
     catch(e){
       if(/cancelled|stopped the upload/.test(e.message))throw e;
       log('  fast upload failed ('+e.message+')');
+      try{await Promise.race([Promise.resolve(pendingOp).catch(()=>{}),sleep(5000)]);}catch(x){}
       try{const s2=await tmo(readStatus(),3000,'status read');if(s2.uploading)ctx.pos=s2.pos;}catch(x){}
     }
     pos=ctx.pos;
