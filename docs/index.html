@@ -91,7 +91,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.12';  // page version; goes with firmware v25
+const BUILD='1.13';  // page version; goes with firmware v25
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -300,36 +300,38 @@ for(const [id,fn] of [
      await cmd([0x26,m&255,m>>8,o,$('tapOn').checked?0:1]);log('saved: change every '+m+' min, '+(o?'random':'in order')+', NFC tap '+($('tapOn').checked?'on':'off'));await refreshAll();}],
 ]) $(id).onclick=()=>run(fn);
 
+const tmo=(pr,ms,what)=>Promise.race([pr,new Promise((_,rej)=>setTimeout(()=>rej(new Error('no reaction in '+ms+' ms: '+what)),ms))]);
 async function wwr(b){ // write without response; a full queue of the browser is retried
   for(let t=0;;t++){
-    try{await chr.writeValueWithoutResponse(b);return;}
-    catch(e){if(t>=20)throw e;await sleep(15);}
+    try{await tmo(chr.writeValueWithoutResponse(b),1500,'write without response');return;}
+    catch(e){if(t>=20||/no reaction/.test(e.message))throw e;await sleep(15);}
   }
 }
 // fast: command 0x30 = offset + data, written in windows without response. After each window the position is read
 // from the status: what the tag has not stored is sent again from that position (a repeat is harmless).
-async function sendFast(data,max,prog){
-  const len=data.length;let pos=0,win=8,bad=0;
-  while(pos<len){
+// ctx.pos always holds the position confirmed by the tag, so that the safe mode can continue from it.
+async function sendFast(data,max,prog,ctx){
+  const len=data.length;let win=1,bad=0,first=true;
+  while(ctx.pos<len){
     if(cancel){await wr([0x2A]);throw new Error('cancelled');}
-    let p=pos;
+    let p=ctx.pos;
     for(let k=0;k<win&&p<len;k++){
       const n=Math.min(max,len-p);const b=new Uint8Array(n+3);b[0]=0x30;b[1]=p&255;b[2]=p>>8;b.set(data.subarray(p,p+n),3);
       await wwr(b);p+=n;
     }
     let s,seen=-1,since=Date.now();
     for(;;){
-      s=await readStatus();
+      s=await tmo(readStatus(),2000,'status read');
       if(!s.uploading)throw new Error('the tag stopped the upload ('+(ERR[s.res]||('error '+s.res))+')');
       if(s.pos>=p)break;
       if(s.pos!==seen){seen=s.pos;since=Date.now();}else if(Date.now()-since>500)break;
       await sleep(10);
     }
-    if(s.pos>=p){pos=p;bad=0;if(win<32)win+=4;}
-    else{if(s.pos>pos)bad=0;else bad++;pos=s.pos;win=Math.max(4,win>>1);stats.resync++;if(bad>=3)return pos;}
-    prog(pos);
+    if(first){log('  fast: the first test packet, the tag stored '+s.pos+' of '+p+' bytes'+(s.pos>=p?' - works':' - NOT stored'));if(s.pos<p)return;first=false;}
+    if(s.pos>=p){ctx.pos=p;bad=0;win=Math.min(win<4?4:win+4,32);}
+    else{if(s.pos>ctx.pos)bad=0;else bad++;ctx.pos=s.pos;win=1;stats.resync++;if(bad>=3)return;}
+    prog(ctx.pos);
   }
-  return pos;
 }
 async function sendSafe(data,pos,chunk,prog){
   const len=data.length;
@@ -349,7 +351,14 @@ async function uploadOne(slot,enc){
   const fast=$('upmode').value==='auto'&&max>=3&&!!chr.writeValueWithoutResponse&&!(chr.properties&&!chr.properties.writeWithoutResponse);
   let pos=0,t0=Date.now(),how='safe';stats={resync:0};
   if(fast){
-    how='fast';pos=await sendFast(data,max,prog);
+    how='fast';const ctx={pos:0};
+    try{await sendFast(data,max,prog,ctx);}
+    catch(e){
+      if(/cancelled|stopped the upload/.test(e.message))throw e;
+      log('  fast upload failed ('+e.message+')');
+      try{const s2=await tmo(readStatus(),3000,'status read');if(s2.uploading)ctx.pos=s2.pos;}catch(x){}
+    }
+    pos=ctx.pos;
     if(pos<len){log('  fast upload is not stable here, continuing in safe mode from byte '+pos);how='fast, then safe';}
   }
   if(pos<len)pos=await sendSafe(data,pos,+$('chunk').value,prog);
