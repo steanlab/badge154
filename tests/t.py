@@ -200,6 +200,43 @@ r=cmd(0x2F,9); check(r[1]==1 and gi('tx_stub').value==5,'tx power: index out of 
 r=cmd(0x2F); check(r[1]==1,'tx power: missing index is refused')
 cmd(0x26,5,0,0,0); check(mem[0x79000+8]==6 and gi('tx_stub').value==5,'tx power: the slideshow settings do not change it')
 cmd(0x2F,2); check(mem[0x79000+8]==3 and gi('tx_stub').value==2,'tx power: back to the default')
+# fast upload: command 0x30 (data at an offset, for writes without response in a window)
+def begin(slot, payload, flags=1):
+    c=crc16(payload); return cmd(0x20,slot,flags,len(payload)&255,len(payload)>>8,c&255,c>>8,1,0)
+def d30(off, d): return cmd(0x30,off&255,off>>8,data=d)
+def pos(): return stat[13]|(stat[14]<<8)
+check(cmd(0x28)[16]==17,'fast upload: the tag declares 17 data bytes per write')
+raw=pack2(make_img('blocks')); z=lz4(raw)
+begin(7,z); ok2=True
+for i in range(0,len(z),17): ok2&=d30(i,z[i:i+17])[1]==0
+r=cmd(0x22); check(ok2 and r[1]==0,'fast upload: consecutive chunks, end res=%d'%r[1])
+cmd(0x25,7); L.slides_tick(); check(bytes(shown)==raw,'fast upload: the slide equals the source'); cmd(0x23,7)
+begin(7,z); d30(0,z[0:17]); r=d30(0,z[0:17]); check(r[1]==0 and pos()==17,'fast upload: a repeated chunk is accepted and ignored (pos %d)'%pos())
+r=d30(34,z[34:51]); check(r[1]==1 and pos()==17,'fast upload: a gap is refused, position stays %d'%pos())
+r=d30(10,z[10:27]); check(r[1]==1 and pos()==17,'fast upload: a partial overlap is refused')
+ok2=True
+for i in range(17,len(z),17): ok2&=d30(i,z[i:i+17])[1]==0
+r=cmd(0x22); check(ok2 and r[1]==0,'fast upload: continues from the status position, end res=%d'%r[1])
+cmd(0x25,7); L.slides_tick(); check(bytes(shown)==raw,'fast upload: the slide equals the source after a gap and a repeat'); cmd(0x23,7)
+r=d30(0,z[0:17]); check(r[1]==7,'fast upload: no upload is open -> 7')
+begin(7,z); r=cmd(0x30,0,0); check(r[1]==1,'fast upload: a command without data is refused'); cmd(0x2A)
+begin(7,z[:20]); r=d30(0,z[:17]); r=d30(17,z[:17]); check(r[1]==1,'fast upload: data past the declared length stops the upload'); check(cmd(0x28)[2]&1==0,'fast upload: ... and the upload is closed')
+begin(7,z); d30(0,z[0:17]); d30(17,z[17:34]); r=cmd(0x21,data=z[34:51]); check(r[1]==0 and pos()==51,'fast upload: 0x21 and 0x30 can be mixed'); cmd(0x2A)
+# the name of the tag (commands 0x31, 0x32)
+n0=gi('name_applies').value
+r=cmd(0x32,*b'Anna'); check(r[1]==0 and gi('name_stub_len').value==4 and bytes((ctypes.c_uint8*4).in_dll(L,'name_stub'))==b'Anna','name: set and applied to the scan response')
+check(mem[0x79000+9]==4 and bytes(mem[0x79000+16:0x79000+20])==b'Anna' and mem[0x79000+10]==(ord('A')^ord('n')^ord('n')^ord('a')),'name: stored with the settings')
+r=cmd(0x31); check(r[0]==0x31 and r[1]==0 and r[2]==4 and r[3:7]==b'Anna','name: read back')
+cmd(0x26,7,1,0,0); check(cmd(0x31)[2]==4 and mem[0x79000+9]==4,'name: the slideshow settings do not change it')
+cmd(0x2F,4); check(cmd(0x31)[3:7]==b'Anna' and gi('tx_stub').value==4,'name: the TX power setting does not change it'); cmd(0x2F,2)
+gi('name_stub_len').value=0xFF; L.slides_init(); check(gi('name_stub_len').value==4 and bytes((ctypes.c_uint8*4).in_dll(L,'name_stub'))==b'Anna','name: loaded and applied at start')
+r=cmd(0x32,*b'0123456789ABCDEF'); check(r[1]==0 and cmd(0x31)[2]==16,'name: 16 bytes are accepted')
+r=cmd(0x32,*b'0123456789ABCDEFG'); check(r[1]==1 and cmd(0x31)[2]==16,'name: 17 bytes are refused, the old name stays')
+r=cmd(0x32,65,10,66); check(r[1]==1 and cmd(0x31)[2]==16,'name: control characters are refused')
+r=cmd(0x32); check(r[1]==0 and cmd(0x31)[2]==0 and gi('name_stub_len').value==0,'name: empty = the default name')
+cmd(0x32,*b'Zed'); mem[0x79000+17]^=0x01; gi('name_stub_len').value=0xFF; L.slides_init(); check(gi('name_stub_len').value==0,'name: a damaged name is dropped (default)')
+cmd(0x32,*b'Zed'); b=gi('show_count').value; cmd(0x32,*b'Max'); check(gi('show_count').value==b,'name: changing it does not redraw the panel')
+cmd(0x32)
 # low battery policy
 bat=ctypes.c_uint16.in_dll(L,'battery_mv')
 def flags(): return cmd(0x28)[2]
@@ -211,7 +248,7 @@ bat.value=2300; tick_s(30); check(flags()&8==0,'low battery: one bad reading is 
 bat.value=3000; tick_s(30); bat.value=2300; tick_s(30); check(flags()&8==0,'low battery: a good reading in between resets the count')
 tick_s(30); check(flags()&8!=0 and gi('show_count').value==b+1 and shown[0]==0xFF,'low battery: two readings -> flag, warning screen drawn once')
 tick_s(120); check(gi('show_count').value==b+1,'low battery: nothing is refreshed afterwards')
-for c,a in ((0x20,(6,1,5,0,0,0,0,0,0)),(0x23,(0,)),(0x24,()),(0x25,(0,)),(0x26,(5,0,0,0)),(0x27,(0,)),(0x2E,()),(0x2F,(3,)),(0x21,()),(0x22,())):
+for c,a in ((0x20,(6,1,5,0,0,0,0,0,0)),(0x23,(0,)),(0x24,()),(0x25,(0,)),(0x26,(5,0,0,0)),(0x27,(0,)),(0x2E,()),(0x2F,(3,)),(0x21,()),(0x22,()),(0x30,(0,0,1)),(0x32,(65,))):
     r=cmd(c,*a); check(r[1]==8,'low battery: command 0x%02X refused (res %d)'%(c,r[1]))
 for c,a in ((0x28,()),(0x29,()),(0x2C,(0,))):
     r=cmd(c,*a); check(r[1]==0,'low battery: command 0x%02X still answers'%c)
