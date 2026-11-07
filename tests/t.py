@@ -200,6 +200,32 @@ r=cmd(0x2F,9); check(r[1]==1 and gi('tx_stub').value==5,'tx power: index out of 
 r=cmd(0x2F); check(r[1]==1,'tx power: missing index is refused')
 cmd(0x26,5,0,0,0); check(mem[0x79000+8]==6 and gi('tx_stub').value==5,'tx power: the slideshow settings do not change it')
 cmd(0x2F,2); check(mem[0x79000+8]==3 and gi('tx_stub').value==2,'tx power: back to the default')
+# low battery policy
+bat=ctypes.c_uint16.in_dll(L,'battery_mv')
+def flags(): return cmd(0x28)[2]
+def tick_s(sec):  # let sec seconds pass in steps of 30 s, one tick each
+    for _ in range(max(1,sec//30)):
+        gu('fake_time').value+=30; L.slides_tick()
+bat.value=3000; boot_splash(2); b=gi('show_count').value
+bat.value=2300; tick_s(30); check(flags()&8==0,'low battery: one bad reading is not enough')
+bat.value=3000; tick_s(30); bat.value=2300; tick_s(30); check(flags()&8==0,'low battery: a good reading in between resets the count')
+tick_s(30); check(flags()&8!=0 and gi('show_count').value==b+1 and shown[0]==0xFF,'low battery: two readings -> flag, warning screen drawn once')
+tick_s(120); check(gi('show_count').value==b+1,'low battery: nothing is refreshed afterwards')
+for c,a in ((0x20,(6,1,5,0,0,0,0,0,0)),(0x23,(0,)),(0x24,()),(0x25,(0,)),(0x26,(5,0,0,0)),(0x27,(0,)),(0x2E,()),(0x2F,(3,)),(0x21,()),(0x22,())):
+    r=cmd(c,*a); check(r[1]==8,'low battery: command 0x%02X refused (res %d)'%(c,r[1]))
+for c,a in ((0x28,()),(0x29,()),(0x2C,(0,))):
+    r=cmd(c,*a); check(r[1]==0,'low battery: command 0x%02X still answers'%c)
+gi('fake_tap').value=1; L.slides_tick(); tick_s(7200); check(gi('show_count').value==b+1,'low battery: no tap and no automatic change')
+bat.value=2450; tick_s(60); check(flags()&8!=0,'low battery: hysteresis, 2.45 V is still low')
+bat.value=2600; tick_s(60); check(flags()&8==0 and gi('show_count').value==b+2 and shown[0]!=0xFF,'low battery: recovered -> back to the slides')
+# new battery in a dying tag: the start-up shows the warning instead of the splash
+bat.value=2350; host_reset(); L.slides_init(); L.slides_host_reboot(); b=gi('show_count').value
+gu('fake_time').value+=10; L.slides_tick(); L.slides_tick(); check(gi('show_count').value==b+1 and shown[0]==0xFF and flags()&8!=0,'low battery at start: warning instead of the splash')
+# the battery falls in the middle of an upload
+bat.value=3000; boot_splash(0); z=bytes(range(200))*3; crc=crc16(z)
+cmd(0x20,3,0,len(z)&255,len(z)>>8,crc&255,crc>>8,1,0); cmd(0x21,data=z[:19])
+bat.value=2300; tick_s(60); r=cmd(0x21,data=z[19:38]); check(r[1]==8 and flags()&1==0,'low battery: an upload in progress is stopped')
+bat.value=3000; tick_s(60)
 check(gi('write_violations').value==0,'flash write violations = %d'%gi('write_violations').value)
 print('ALL OK' if ok else 'FAILURES')
 sys.exit(0 if ok else 1)
