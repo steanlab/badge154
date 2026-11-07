@@ -86,7 +86,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.10';  // page version; goes with firmware v23
+const BUILD='1.11';  // page version; goes with firmware v24
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -202,10 +202,10 @@ $('file').onchange=async()=>{
 // ---------- Bluetooth ----------
 let dev=null,chr=null,busy=false,cancel=false,lastStatus=null;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const ERR={1:'bad argument',2:'no space left on the tag',3:'CRC error (data damaged in transfer)',4:'busy',5:'flash write error',6:'slide not found',7:'no upload in progress',8:'battery too low for flash writes',9:'unknown command'};
+const ERR={1:'bad argument',2:'no space left on the tag',3:'CRC error (data damaged in transfer)',4:'busy',5:'flash write error',6:'slide not found',7:'no upload in progress',8:'battery too low: writing and screen updates are paused, change the battery',9:'unknown command'};
 function setState(s){$('state').textContent=s;}
 function parseStatus(r){
-  return {cmd:r[0],res:r[1],uploading:!!(r[2]&1),refreshing:!!(r[2]&2),pending:!!(r[2]&4),count:r[3],cur:r[4],free:r[5],
+  return {cmd:r[0],res:r[1],uploading:!!(r[2]&1),refreshing:!!(r[2]&2),low:!!(r[2]&8),pending:!!(r[2]&4),count:r[3],cur:r[4],free:r[5],
     interval:r[6]|(r[7]<<8),order:r[8],flags:r[9],mv:r[10]|(r[11]<<8),fw:r[12],pos:r[13]|(r[14]<<8),total:r[15],raw:r};
 }
 async function readStatus(wantCmd){
@@ -226,7 +226,7 @@ async function cmd(bytes,expectOk){
   return s;
 }
 function showInfo(s){
-  $('devinfo').textContent='firmware v'+s.fw+', battery '+(s.mv/1000).toFixed(2)+' V, '+s.count+' slide(s), free '+(s.free*4)+' KB'+(s.refreshing?', panel refreshing':'');
+  $('devinfo').textContent='firmware v'+s.fw+', battery '+(s.mv/1000).toFixed(2)+' V, '+s.count+' slide(s), free '+(s.free*4)+' KB'+(s.refreshing?', panel refreshing':'')+(s.low?' \u2014 LOW BATTERY: updates paused':'');
   $('auto').value=s.interval;$('order').value=s.order;$('tapOn').checked=!(s.flags&1);
 }
 async function refreshAll(){
