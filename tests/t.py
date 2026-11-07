@@ -193,6 +193,13 @@ b=gi('show_count').value; r=cmd(0x2E); check(r[1]==0 and gi('show_count').value=
 img=bytes(shown); check(img[0]==0xFF and img.count(0xFF)>8000,'hardware report: red background')
 
 z=bytes(50); crc=crc16(z); cmd(0x20,6,1,len(z)&255,len(z)>>8,crc&255,crc>>8,1,0); r=cmd(0x2E); check(r[1]==4,'hardware report refused during an upload'); cmd(0x2A)
+# TX power setting (command 0x2F)
+r=cmd(0x2F,5); check(r[1]==0 and gi('tx_stub').value==5,'tx power: level applied (index 5)')
+check(mem[0x79000+8]==6,'tx power: stored in the settings (index+1)')
+r=cmd(0x2F,9); check(r[1]==1 and gi('tx_stub').value==5,'tx power: index out of range is refused')
+r=cmd(0x2F); check(r[1]==1,'tx power: missing index is refused')
+cmd(0x26,5,0,0,0); check(mem[0x79000+8]==6 and gi('tx_stub').value==5,'tx power: the slideshow settings do not change it')
+cmd(0x2F,2); check(mem[0x79000+8]==3 and gi('tx_stub').value==2,'tx power: back to the default')
 check(gi('write_violations').value==0,'flash write violations = %d'%gi('write_violations').value)
 print('ALL OK' if ok else 'FAILURES')
 sys.exit(0 if ok else 1)
