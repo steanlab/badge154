@@ -3,3 +3,4 @@ codec_out.json
 __pycache__/
 *.bin
 *.hex
+tests/fuzz
