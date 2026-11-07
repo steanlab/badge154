@@ -20,6 +20,7 @@
 #include "hwinfo.h"
 #include "wdt.h"
 #include "textscr.h"
+#include "txpower.h"
 
 /* ---------------------------------------------------------------------------------------------
  * constants
@@ -109,9 +110,10 @@ typedef struct
     uint16_t interval_min; /* 0 = off */
     uint8_t  order;        /* 0 = in order, 1 = random */
     uint8_t  flags;        /* bit0: NFC tap does not change slides */
+    uint8_t  tx;           /* radio power level, index for txpower.c */
 } sl_cfg_t;
 
-RAM static sl_cfg_t cfg = {60, 0, 0};
+RAM static sl_cfg_t cfg = {60, 0, 0, TX_DEFAULT};
 
 static uint8_t cfg_crc(const uint8_t *b)
 {
@@ -131,6 +133,8 @@ static void cfg_load(void)
         cfg.interval_min = (uint16_t)(b[4] | (b[5] << 8));
         cfg.order = b[6] & 1;
         cfg.flags = b[7];
+        if (b[8] >= 1 && b[8] <= TX_LEVELS) /* 0 = never set (also in the older settings): default */
+            cfg.tx = (uint8_t)(b[8] - 1);
     }
 }
 
@@ -146,7 +150,8 @@ static void cfg_save(void)
     b[5] = cfg.interval_min >> 8;
     b[6] = cfg.order;
     b[7] = cfg.flags;
-    b[8] = b[9] = b[10] = b[11] = 0;
+    b[8] = (uint8_t)(cfg.tx + 1);
+    b[9] = b[10] = b[11] = 0;
     b[12] = cfg_crc(b);
     fl_erase(CFG_ADDR);
     fl_write(CFG_ADDR, b, 16);
@@ -832,6 +837,16 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
         else
             res = R_BADARG;
         break;
+    case 0x2F: /* TX power: level index */
+        if (len < 2 || p[1] >= TX_LEVELS)
+        {
+            res = R_BADARG;
+            break;
+        }
+        cfg.tx = p[1];
+        cfg_save();
+        txpower_set(cfg.tx);
+        break;
     case 0x2E: /* hardware report on the tag screen */
         if (up_active)
             res = R_BUSY;
@@ -858,6 +873,7 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
 void slides_init(void)
 {
     cfg_load();
+    txpower_set(cfg.tx);
     sl_scan();
     last_change = get_time();
 }
