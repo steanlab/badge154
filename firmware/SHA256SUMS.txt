@@ -1,0 +1,1 @@
+64a2bb18b8cac0b807e28fd9efd825b5a3e540500e190c4ba0f4f20a570d7d80  badge154-firmware-v1.0.0.bin
