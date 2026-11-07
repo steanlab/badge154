@@ -9,7 +9,9 @@ uint8_t epd_update_state = 0;
 uint32_t fake_time = 0;
 int fake_conn = 0;
 uint8_t shown[10000]; int show_count = 0;
-int write_violations = 0, erase_count = 0;
+int write_violations = 0, erase_count = 0, region_violations = 0;
+/* the firmware may program and erase only the slide area and the settings sector (the rest holds the firmware, the MAC address and the calibration) */
+static int region_ok(uint32_t a){ return (a >= 0x14000u && a < 0x76000u) || (a >= 0x79000u && a < 0x7A000u); }
 void flash_read_page(uint32_t a, uint32_t l, uint8_t *b){ memcpy(b, flash_mem+a, l); }
 /* The real flash cannot be read while it is programmed, so the source of a write must be in RAM (writable), never const data.
    Checked through /proc/self/maps: the source mapping has to be writable. */
@@ -25,9 +27,10 @@ static int src_writable(const void *p){
 void flash_write_page(uint32_t a, uint32_t l, uint8_t *b){
   if (l <= 16 && !src_writable(b)) write_violations++;
   if ((a & 255) + l > 256) write_violations++;
+  if (!region_ok(a) || !region_ok(a + l - 1)) region_violations++;
   for (uint32_t i=0;i<l;i++){ if ((flash_mem[a+i] & b[i]) != b[i]) write_violations++; flash_mem[a+i] &= b[i]; }
 }
-void flash_erase_sector(uint32_t a){ if (a & 4095) write_violations++; memset(flash_mem + a, 0xFF, 4096); erase_count++; }
+void flash_erase_sector(uint32_t a){ if (a & 4095) write_violations++; if (!region_ok(a)) region_violations++; memset(flash_mem + a, 0xFF, 4096); erase_count++; }
 uint32_t get_time(void){ return fake_time; }
 uint32_t clock_time(void){ return 777; }
 int ble_get_connected(void){ return fake_conn; }
