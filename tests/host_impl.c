@@ -42,6 +42,9 @@ void nfc_poll(void){}
 uint8_t nfc_tap_take(void){ uint8_t t = (uint8_t)fake_tap; fake_tap = 0; return t; }
 int tx_stub = 2;
 void txpower_set(uint8_t i){ if (i < 9) tx_stub = i; }
+/* the tag name as the scan response would carry it */
+uint8_t name_stub[17]; uint8_t name_stub_len = 0xFF; int name_applies = 0;
+void tagname_apply(const uint8_t *n, uint8_t len){ uint8_t i; name_applies++; name_stub_len = len; for (i = 0; i < len && i < 16; i++) name_stub[i] = n[i]; }
 int8_t txpower_dbm(void){ return 3; }
 int wdt_test_calls = 0;
 void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s){ int i; (void)s; for(i=0;i<TXT_LINES;i++) strcpy(ln[i], i==0 ? "Battery 3.012 V" : i==5 ? "RAM 19659 B free" : "TEST LINE"); }
