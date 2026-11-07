@@ -42,6 +42,8 @@ void txpower_set(uint8_t i){ if (i < 9) tx_stub = i; }
 int8_t txpower_dbm(void){ return 3; }
 int wdt_test_calls = 0;
 void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s){ int i; (void)s; for(i=0;i<TXT_LINES;i++) strcpy(ln[i], i==0 ? "Battery 3.012 V" : i==5 ? "RAM 19659 B free" : "TEST LINE"); }
+void hwinfo_low_text(char (*ln)[TXT_COLS + 1], uint16_t mv){ (void)mv; strcpy(ln[0], "Battery 2.35 V"); strcpy(ln[1], "Updates paused"); strcpy(ln[2], "Slides are kept"); strcpy(ln[3], "Change battery"); }
+uint16_t get_battery_mv(void){ return battery_mv; }
 void wdt_test_request(void){ wdt_test_calls++; }
 uint8_t wdt_restarts(void){return 0;}
 void nfc_probe_run(uint8_t s, uint8_t a){(void)s;(void)a;}
