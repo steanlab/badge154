@@ -155,6 +155,21 @@ void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s)
     *p = 0;
 }
 
+void hwinfo_low_text(char (*ln)[TXT_COLS + 1], uint16_t mv)
+{
+    char *p = cat(ln[0], "Battery ");
+    p = dec(p, mv / 1000u);
+    *p++ = '.';
+    *p++ = (char)('0' + mv / 100 % 10);
+    *p++ = (char)('0' + mv / 10 % 10);
+    *p++ = (char)('0' + mv % 10);
+    p = cat(p, " V");
+    *p = 0;
+    *cat(ln[1], "Updates paused") = 0;
+    *cat(ln[2], "Slides are kept") = 0;
+    *cat(ln[3], "Change battery") = 0;
+}
+
 void hwinfo_fill(uint8_t page, uint8_t *r, const hw_slides_t *s)
 {
     uint8_t i;
