@@ -22,6 +22,7 @@
 #include "wdt.h"
 #include "textscr.h"
 #include "txpower.h"
+#include "tagname.h"
 
 /* ---------------------------------------------------------------------------------------------
  * constants
@@ -112,9 +113,19 @@ typedef struct
     uint8_t  order;        /* 0 = in order, 1 = random */
     uint8_t  flags;        /* bit0: NFC tap does not change slides */
     uint8_t  tx;           /* radio power level, index for txpower.c */
+    uint8_t  name_len;     /* name of the tag, see tagname.c; 0 = none */
+    uint8_t  name[TAGNAME_MAX];
 } sl_cfg_t;
 
-RAM static sl_cfg_t cfg = {60, 0, 0, TX_DEFAULT};
+RAM static sl_cfg_t cfg = {60, 0, 0, TX_DEFAULT, 0, {0}};
+
+static uint8_t name_xor(const uint8_t *n, uint8_t len)
+{
+    uint8_t i, c = 0;
+    for (i = 0; i < len; i++)
+        c ^= n[i];
+    return c;
+}
 
 static uint8_t cfg_crc(const uint8_t *b)
 {
@@ -126,8 +137,8 @@ static uint8_t cfg_crc(const uint8_t *b)
 
 static void cfg_load(void)
 {
-    uint8_t b[16];
-    fl_read(CFG_ADDR, 16, b);
+    uint8_t b[32];
+    fl_read(CFG_ADDR, 32, b);
     if (b[0] == (CFG_MAGIC & 0xFF) && b[1] == ((CFG_MAGIC >> 8) & 0xFF) && b[2] == ((CFG_MAGIC >> 16) & 0xFF) &&
         b[3] == ((CFG_MAGIC >> 24) & 0xFF) && b[12] == cfg_crc(b))
     {
@@ -136,12 +147,22 @@ static void cfg_load(void)
         cfg.flags = b[7];
         if (b[8] >= 1 && b[8] <= TX_LEVELS) /* 0 = never set (also in the older settings): default */
             cfg.tx = (uint8_t)(b[8] - 1);
+        /* b[9] = length of the name (0 in the older settings), b[10] = xor of its bytes, the name is at 16..31 */
+        if (b[9] <= TAGNAME_MAX && b[10] == name_xor(b + 16, b[9]))
+        {
+            cfg.name_len = b[9];
+            memcpy(cfg.name, b + 16, b[9]);
+        }
+        else
+        {
+            cfg.name_len = 0; /* damaged: the default name */
+        }
     }
 }
 
 static void cfg_save(void)
 {
-    uint8_t b[16];
+    uint8_t b[32];
     memset(b, 0xFF, sizeof(b));
     b[0] = CFG_MAGIC & 0xFF;
     b[1] = (CFG_MAGIC >> 8) & 0xFF;
@@ -152,10 +173,13 @@ static void cfg_save(void)
     b[6] = cfg.order;
     b[7] = cfg.flags;
     b[8] = (uint8_t)(cfg.tx + 1);
-    b[9] = b[10] = b[11] = 0;
+    b[9] = cfg.name_len;
+    b[10] = name_xor(cfg.name, cfg.name_len);
+    b[11] = 0;
+    memcpy(b + 16, cfg.name, cfg.name_len);
     b[12] = cfg_crc(b);
     fl_erase(CFG_ADDR);
-    fl_write(CFG_ADDR, b, 16);
+    fl_write(CFG_ADDR, b, 32);
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -294,6 +318,20 @@ static int up_flush_page(uint32_t off)
     fl_write(SL_BASE + (uint32_t)up_sec * SL_SECSZ + off, page_buf, 256);
     memset(page_buf, 0xFF, sizeof(page_buf));
     return 0;
+}
+
+/* store n bytes at the upload position (the caller has checked that they fit) */
+static void up_append(const uint8_t *d, unsigned int n)
+{
+    unsigned int i;
+    for (i = 0; i < n; i++)
+    {
+        uint32_t off = SL_HDR + up_pos;
+        page_buf[off & 255] = d[i];
+        up_pos++;
+        if ((off & 255) == 255)
+            up_flush_page(off & ~255u);
+    }
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -610,7 +648,7 @@ static void resp_update(void)
     r[13] = up_pos & 0xFF;
     r[14] = up_pos >> 8;
     r[15] = (uint8_t)SL_SECTORS;
-    r[16] = 0;
+    r[16] = SL_WRITE_MAX;
     r[17] = 0;
     r[18] = 0;
     r[19] = 0x5A;
@@ -636,6 +674,19 @@ static void hw_slides(hw_slides_t *hp)
     h.count = pl_count;
     h.interval_min = cfg.interval_min;
     *hp = h;
+}
+
+static void resp_name(void)
+{
+    uint8_t *r = my_EPD_BLE_Data;
+    unsigned int i;
+    for (i = 0; i < 20; i++)
+        r[i] = 0;
+    r[0] = 0x31;
+    r[1] = R_OK;
+    r[2] = cfg.name_len;
+    memcpy(r + 3, cfg.name, cfg.name_len);
+    r[19] = 0x5A;
 }
 
 static void resp_hw(uint8_t page)
@@ -671,7 +722,7 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
     unsigned int i;
 
     list_mode = 0;
-    if (batt_low && (cmd == 0x20 || cmd == 0x21 || cmd == 0x22 || (cmd >= 0x23 && cmd <= 0x27) || cmd == 0x2E || cmd == 0x2F))
+    if (batt_low && (cmd == 0x20 || cmd == 0x21 || cmd == 0x22 || (cmd >= 0x23 && cmd <= 0x27) || cmd == 0x2E || cmd == 0x2F || cmd == 0x30 || cmd == 0x32))
     {
         if (up_active)
             up_abort(); /* the battery fell in the middle of an upload: stop writing the flash */
@@ -741,14 +792,64 @@ int slides_ble_cmd(const uint8_t *p, unsigned int len)
             res = R_BADARG;
             break;
         }
-        for (i = 0; i < n; i++)
+        up_append(p + 1, n);
+        break;
+    }
+    case 0x30: /* DATA AT OFFSET: offset(2), bytes.  Meant for writes without response in a window: a chunk that is
+                  not the next one in line is not stored (a repeat is accepted silently); the page reads the position
+                  from the status and continues from there. */
+    {
+        unsigned int n, off;
+        if (len < 4)
         {
-            uint32_t off = SL_HDR + up_pos;
-            page_buf[off & 255] = p[1 + i];
-            up_pos++;
-            if ((off & 255) == 255)
-                up_flush_page(off & ~255u);
+            res = R_BADARG;
+            break;
         }
+        if (!up_active)
+        {
+            res = R_NOUPLOAD;
+            break;
+        }
+        n = len - 3;
+        off = (unsigned int)(p[1] | (p[2] << 8));
+        if (off + n <= up_pos)
+            break; /* already stored */
+        if (off != up_pos)
+        {
+            res = R_BADARG; /* a gap (or a partial overlap): wait for the page to resend from the status position */
+            break;
+        }
+        if (up_pos + n > up_len)
+        {
+            up_abort();
+            res = R_BADARG;
+            break;
+        }
+        up_append(p + 3, n);
+        break;
+    }
+    case 0x31: /* NAME: read */
+        resp_name();
+        list_mode = 3; /* the answer stays in the status buffer */
+        break;
+    case 0x32: /* NAME: set (no bytes = the default name) */
+    {
+        unsigned int n = len - 1;
+        if (n > TAGNAME_MAX)
+        {
+            res = R_BADARG;
+            break;
+        }
+        for (i = 0; i < n; i++)
+            if (p[1 + i] < 0x20 || p[1 + i] == 0x7F)
+                res = R_BADARG; /* control characters */
+        if (res != R_OK)
+            break;
+        cfg.name_len = (uint8_t)n;
+        memset(cfg.name, 0, sizeof(cfg.name));
+        memcpy(cfg.name, p + 1, n);
+        cfg_save();
+        tagname_apply(cfg.name, cfg.name_len);
         break;
     }
     case 0x22: /* END */
@@ -937,6 +1038,7 @@ void slides_init(void)
 {
     cfg_load();
     txpower_set(cfg.tx);
+    tagname_apply(cfg.name, cfg.name_len);
     sl_scan();
     last_change = get_time();
 }
