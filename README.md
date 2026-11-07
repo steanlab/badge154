@@ -2,6 +2,8 @@
 
 ![badge154: Bluetooth / NFC slideshow for Hanshow Nebular 154 e-paper tags](docs/img/social-preview.png)
 
+**Language:** English · [Русский](README.ru.md)
+
 [![Release](https://img.shields.io/github/v/release/steanlab/badge154)](https://github.com/steanlab/badge154/releases) [![Licence: MIT (page and docs)](https://img.shields.io/badge/licence-MIT%20(page%20and%20docs)-blue)](LICENSE)
 
 A standalone e-paper slideshow for the **Hanshow Nebular 154** electronic shelf labels (**Pro 154Q-N, Plus 154Q-N and 154R-N**; one firmware, tested on all three): 1.54", 200 x 200 px,
