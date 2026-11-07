@@ -22,7 +22,7 @@ check(cnt[3]>25000,'text screen: red background (%d px)'%cnt[3])
 # the last glyph fits: the right margin stays red; the heading and the rule are white
 check(all(px(x,y)==3 for y in range(200) for x in range(197,200)),'text screen: right margin red')
 check(any(px(x,y)==1 for y in range(0,30) for x in range(200)),'text screen: white heading')
-if '-v' in sys.argv or True:
+if '-v' in sys.argv:
     for y in range(0,200,2):
         print(''.join(' .#R'[px(x,y)] if True else '' for x in range(0,200,2)))
 sys.exit(0 if ok else 1)
