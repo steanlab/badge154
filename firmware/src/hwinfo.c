@@ -9,13 +9,13 @@
 #include "time.h"
 #include "hwinfo.h"
 #include "wdt.h"
+#include "txpower.h"
 
 extern uint8_t mac_public[6];
 extern uint32_t _end_bss_; /* linker symbol: end of the static RAM; the stack grows down from 0x850000 */
 
 #define SRAM_START 0x840000u
 #define SRAM_END   0x850000u
-#define TX_DBM     3 /* ble.c: rf_set_power_level_index(RF_POWER_P3p01dBm); change both together */
 
 /* The flash driver of this SDK has no id functions, so the JEDEC id (0x9F) and the unique id (0x4B, XTX: 0x5A) are read here.
  * Code that talks to the flash chip must run from RAM and with interrupts off, like the driver does.
@@ -149,8 +149,8 @@ void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s)
     *p = 0;
 
     p = cat(ln[6], "TX power ");
-    *p++ = TX_DBM < 0 ? '-' : '+';
-    p = dec(p, (uint32_t)(TX_DBM < 0 ? -TX_DBM : TX_DBM));
+    *p++ = txpower_dbm() < 0 ? '-' : '+';
+    p = dec(p, (uint32_t)(txpower_dbm() < 0 ? -txpower_dbm() : txpower_dbm()));
     p = cat(p, " dBm");
     *p = 0;
 }
@@ -172,7 +172,7 @@ void hwinfo_fill(uint8_t page, uint8_t *r, const hw_slides_t *s)
         put16(d, get_battery_mv());
         put32(d + 2, get_time());
         put32(d + 6, s->next_s);
-        d[10] = (uint8_t)(int8_t)TX_DBM;
+        d[10] = (uint8_t)txpower_dbm();
         put16(d + 11, blc_att_getEffectiveMtuSize(0));
         put16(d + 13, bls_ll_getConnectionInterval());
         d[15] = wdt_restarts();
