@@ -48,6 +48,10 @@ The LED is the only indicator besides the screen.
 
 ## Screens on the tag
 
+![The start-up screen of the tag](img/startup-screen.jpg)
+
+*The start-up screen (the wires are the programming connection used for flashing).*
+
 - **Start-up screen** (BADGE154 PROJECT): drawn at every start. It stays until a phone has connected and disconnected, or until the interval of the slideshow runs out; then the slides begin.
 - **Slides**: what you uploaded.
 - **TAG HARDWARE**: the report you asked for (red background, white text).
