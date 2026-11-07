@@ -26,3 +26,6 @@ void hwinfo_fill(uint8_t page, uint8_t *r, const hw_slides_t *s);
 
 /* The same report as short text lines for the tag screen (BLE command 0x2E): battery, firmware, slides, slide memory, flash, RAM, TX power. */
 void hwinfo_text(char (*ln)[TXT_COLS + 1], const hw_slides_t *s);
+
+/* Text of the low-battery screen: 4 lines. */
+void hwinfo_low_text(char (*ln)[TXT_COLS + 1], uint16_t mv);
