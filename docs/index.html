@@ -40,6 +40,10 @@
  <button class="act" id="setcfg">Save to tag</button><br>
  <label><input type="checkbox" id="tapOn" checked> NFC tap with a phone = next slide (not while this page is connected)</label></p>
 
+<h3>Tag name</h3>
+<p>Name <input id="nameIn" maxlength="16" placeholder="(none)" style="width:12em"> <button class="act" id="nameSave">Save to tag</button><br>
+ <small id="nameHint">Up to 16 bytes. The tag shows up in the Bluetooth list as <b>badge154-name</b>; empty = <b>badge154-</b> and the last 3 bytes of its MAC address. A new name appears in the list after the next scan.</small></p>
+
 <h3>Add pictures</h3>
 <p><input id="file" type="file" accept="image/*" multiple><br>
  Slot <input id="slot" type="number" min="0" max="119" placeholder="auto" style="width:6em"> <small>(empty = first free slot; several files use the following free slots)</small></p>
@@ -65,7 +69,8 @@
 <p class="hint">The unique ID of the flash chip and the full MAC address are shown only here, they are never written to the log.</p>
 
 <details><summary>Advanced</summary>
- <p>Write size <select id="chunk"><option value="19">19 bytes (default)</option><option value="10">10 bytes (slow, safest)</option></select>
+ <p>Upload <select id="upmode"><option value="auto">fast (writes without response, falls back to safe by itself)</option><option value="safe">safe (every write confirmed)</option></select><br>
+ Write size in safe mode <select id="chunk"><option value="19">19 bytes (default)</option><option value="10">10 bytes (slow, safest)</option></select>
  <label><input type="checkbox" id="forceraw"> do not compress</label></p>
  <p><button class="act" id="info">Read status</button></p>
  <p>TX power <select id="txSel"></select> <button class="act" id="txApply">Apply</button><br>
@@ -86,7 +91,7 @@
 <div id="log"></div>
 
 <script>
-const BUILD='1.11';  // page version; goes with firmware v24
+const BUILD='1.12';  // page version; goes with firmware v25
 const SERV='13187b10-eba9-a3ba-044e-83d3217d9a38';
 const CHAR='4b646063-6264-f3a7-8941-e65356ea82fe';
 const W=200,H=200;
@@ -200,13 +205,13 @@ $('file').onchange=async()=>{
 };
 
 // ---------- Bluetooth ----------
-let dev=null,chr=null,busy=false,cancel=false,lastStatus=null;
+let dev=null,chr=null,busy=false,cancel=false,lastStatus=null,tagName=null;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const ERR={1:'bad argument',2:'no space left on the tag',3:'CRC error (data damaged in transfer)',4:'busy',5:'flash write error',6:'slide not found',7:'no upload in progress',8:'battery too low: writing and screen updates are paused, change the battery',9:'unknown command'};
 function setState(s){$('state').textContent=s;}
 function parseStatus(r){
   return {cmd:r[0],res:r[1],uploading:!!(r[2]&1),refreshing:!!(r[2]&2),low:!!(r[2]&8),pending:!!(r[2]&4),count:r[3],cur:r[4],free:r[5],
-    interval:r[6]|(r[7]<<8),order:r[8],flags:r[9],mv:r[10]|(r[11]<<8),fw:r[12],pos:r[13]|(r[14]<<8),total:r[15],raw:r};
+    interval:r[6]|(r[7]<<8),order:r[8],flags:r[9],mv:r[10]|(r[11]<<8),fw:r[12],pos:r[13]|(r[14]<<8),total:r[15],wmax:r[16],raw:r};
 }
 async function readStatus(wantCmd){
   for(let t=0;t<40;t++){
@@ -225,14 +230,26 @@ async function cmd(bytes,expectOk){
   if(expectOk!==false&&s.res!==0)throw new Error((ERR[s.res]||('error '+s.res))+' (command 0x'+bytes[0].toString(16)+')');
   return s;
 }
+async function nameRead(){
+  await wr([0x31]);const s=await readStatus(0x31);
+  if(s.res!==0||s.raw[2]>16)throw new Error('name: bad answer from the tag');
+  return new TextDecoder().decode(s.raw.slice(3,3+s.raw[2]));
+}
+function nameUi(on){
+  $('nameSave').disabled=!on;$('nameIn').disabled=!on;
+  if(on&&document.activeElement!==$('nameIn'))$('nameIn').value=tagName||'';
+  if(!on)$('nameIn').value='';
+}
 function showInfo(s){
-  $('devinfo').textContent='firmware v'+s.fw+', battery '+(s.mv/1000).toFixed(2)+' V, '+s.count+' slide(s), free '+(s.free*4)+' KB'+(s.refreshing?', panel refreshing':'')+(s.low?' \u2014 LOW BATTERY: updates paused':'');
+  $('devinfo').textContent='firmware v'+s.fw+', battery '+(s.mv/1000).toFixed(2)+' V, '+s.count+' slide(s), free '+(s.free*4)+' KB'+(tagName!==null?', name \u201c'+(tagName||'(none)')+'\u201d':'')+(s.refreshing?', panel refreshing':'')+(s.low?' \u2014 LOW BATTERY: updates paused':'');
   $('auto').value=s.interval;$('order').value=s.order;$('tapOn').checked=!(s.flags&1);
 }
 async function refreshAll(){
   await wr([0x29]);const l=await readStatus(0x29);
   const used=[];for(let i=0;i<120;i++)if(l.raw[2+(i>>3)]&(1<<(i&7)))used.push(i);
-  const s=await cmd([0x28]);showInfo(s);
+  const s=await cmd([0x28]);
+  tagName=s.fw>=25?await nameRead():null;nameUi(s.fw>=25);
+  showInfo(s);
   const box=$('slots');box.textContent='';
   if(!used.length){box.textContent='no slides yet';}
   for(const i of used){
@@ -252,7 +269,7 @@ async function run(fn){
 $('connect').onclick=()=>run(async()=>{
   if(!navigator.bluetooth)throw new Error('Web Bluetooth is not available in this browser');
   dev=await navigator.bluetooth.requestDevice($('alldev').checked?{acceptAllDevices:true,optionalServices:[SERV]}:{filters:[{namePrefix:'badge154'},{namePrefix:'ESL_'}],optionalServices:[SERV]});
-  dev.addEventListener('gattserverdisconnected',()=>{setState('disconnected');chr=null;$('hwPriv').textContent='';});
+  dev.addEventListener('gattserverdisconnected',()=>{setState('disconnected');chr=null;tagName=null;$('hwPriv').textContent='';});
   setState('connecting...');
   // the tag advertises once per second, so the first attempt often fails: try up to 4 times
   for(let n=1;;n++){
@@ -274,22 +291,72 @@ for(const [id,fn] of [
   ['nextBtn',async()=>{need();await cmd([0x27,0]);log('next slide (refresh ~25 s)');await refreshAll();}],
   ['prevBtn',async()=>{need();await cmd([0x27,1]);log('previous slide (refresh ~25 s)');await refreshAll();}],
   ['clear',async()=>{need();if(!confirm('Delete ALL slides from the tag?'))return;await cmd([0x24]);log('all slides deleted');await refreshAll();}],
+  ['nameSave',async()=>{need();
+     const b=new TextEncoder().encode($('nameIn').value.trim());
+     if(b.length>16)throw new Error('the name is too long: '+b.length+' bytes, 16 at most');
+     if(b.some(v=>v<0x20||v===0x7F))throw new Error('the name has a control character');
+     await cmd([0x32,...b]);log(b.length?'name saved: '+new TextDecoder().decode(b)+' (in the Bluetooth list as badge154-'+new TextDecoder().decode(b)+' after the next scan)':'name cleared: the list shows badge154- and the MAC suffix');await refreshAll();}],
   ['setcfg',async()=>{need();const m=Math.max(0,Math.min(65535,+$('auto').value||0));const o=+$('order').value;
      await cmd([0x26,m&255,m>>8,o,$('tapOn').checked?0:1]);log('saved: change every '+m+' min, '+(o?'random':'in order')+', NFC tap '+($('tapOn').checked?'on':'off'));await refreshAll();}],
 ]) $(id).onclick=()=>run(fn);
 
-async function uploadOne(slot,enc){
-  const data=enc.data,len=data.length,chunk=+$('chunk').value;
-  await cmd([0x20,slot,enc.flags,len&255,len>>8,enc.crc&255,enc.crc>>8,enc.pal0,enc.pal1]);
-  let sent=0,t0=Date.now();
-  while(sent<len){
-    if(cancel){await wr([0x2A]);throw new Error('cancelled');}
-    const n=Math.min(chunk,len-sent);const b=new Uint8Array(n+1);b[0]=0x21;b.set(data.subarray(sent,sent+n),1);
-    await wr(b);sent+=n;$('prog').value=Math.round(100*sent/len);
+async function wwr(b){ // write without response; a full queue of the browser is retried
+  for(let t=0;;t++){
+    try{await chr.writeValueWithoutResponse(b);return;}
+    catch(e){if(t>=20)throw e;await sleep(15);}
   }
+}
+// fast: command 0x30 = offset + data, written in windows without response. After each window the position is read
+// from the status: what the tag has not stored is sent again from that position (a repeat is harmless).
+async function sendFast(data,max,prog){
+  const len=data.length;let pos=0,win=8,bad=0;
+  while(pos<len){
+    if(cancel){await wr([0x2A]);throw new Error('cancelled');}
+    let p=pos;
+    for(let k=0;k<win&&p<len;k++){
+      const n=Math.min(max,len-p);const b=new Uint8Array(n+3);b[0]=0x30;b[1]=p&255;b[2]=p>>8;b.set(data.subarray(p,p+n),3);
+      await wwr(b);p+=n;
+    }
+    let s,seen=-1,since=Date.now();
+    for(;;){
+      s=await readStatus();
+      if(!s.uploading)throw new Error('the tag stopped the upload ('+(ERR[s.res]||('error '+s.res))+')');
+      if(s.pos>=p)break;
+      if(s.pos!==seen){seen=s.pos;since=Date.now();}else if(Date.now()-since>500)break;
+      await sleep(10);
+    }
+    if(s.pos>=p){pos=p;bad=0;if(win<32)win+=4;}
+    else{if(s.pos>pos)bad=0;else bad++;pos=s.pos;win=Math.max(4,win>>1);stats.resync++;if(bad>=3)return pos;}
+    prog(pos);
+  }
+  return pos;
+}
+async function sendSafe(data,pos,chunk,prog){
+  const len=data.length;
+  while(pos<len){
+    if(cancel){await wr([0x2A]);throw new Error('cancelled');}
+    const n=Math.min(chunk,len-pos);const b=new Uint8Array(n+1);b[0]=0x21;b.set(data.subarray(pos,pos+n),1);
+    await wr(b);pos+=n;prog(pos);
+  }
+  return pos;
+}
+let stats={resync:0};
+async function uploadOne(slot,enc){
+  const data=enc.data,len=data.length;
+  const st=await cmd([0x20,slot,enc.flags,len&255,len>>8,enc.crc&255,enc.crc>>8,enc.pal0,enc.pal1]);
+  const prog=p=>{$('prog').value=Math.round(100*p/len);};
+  const max=Math.min(st.wmax||0,17);
+  const fast=$('upmode').value==='auto'&&max>=3&&!!chr.writeValueWithoutResponse&&!(chr.properties&&!chr.properties.writeWithoutResponse);
+  let pos=0,t0=Date.now(),how='safe';stats={resync:0};
+  if(fast){
+    how='fast';pos=await sendFast(data,max,prog);
+    if(pos<len){log('  fast upload is not stable here, continuing in safe mode from byte '+pos);how='fast, then safe';}
+  }
+  if(pos<len)pos=await sendSafe(data,pos,+$('chunk').value,prog);
   const s=await cmd([0x22],false);
   if(s.res!==0){try{await wr([0x2A]);}catch(e){}throw new Error((ERR[s.res]||('error '+s.res))+' at the end of the upload');}
-  log('slot '+slot+': '+len+' bytes in '+((Date.now()-t0)/1000).toFixed(1)+' s');
+  const sec=(Date.now()-t0)/1000;
+  log('slot '+slot+': '+len+' bytes in '+sec.toFixed(1)+' s ('+(len/1024/Math.max(sec,0.001)).toFixed(1)+' KB/s, '+how+(stats.resync?', '+stats.resync+' resend(s)':'')+')');
 }
 $('upload').onclick=()=>run(async()=>{
   need();if(!files.length)throw new Error('select a picture first');
