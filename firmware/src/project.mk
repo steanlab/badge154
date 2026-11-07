@@ -18,6 +18,7 @@ $(OUT_PATH)/hwinfo.o \
 $(OUT_PATH)/wdt.o \
 $(OUT_PATH)/textscr.o \
 $(OUT_PATH)/txpower.o \
+$(OUT_PATH)/tagname.o \
 $(OUT_PATH)/nfc.o \
 $(OUT_PATH)/main.o
 
